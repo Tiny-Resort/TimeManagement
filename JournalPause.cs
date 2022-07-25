@@ -284,17 +284,24 @@ namespace JournalPause {
 
         // Stops the flow of time
         public static void pauseTime() {
-            var clockRoutine = (Coroutine)AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
-            if (clockRoutine != null) { realWorld.StopCoroutine(clockRoutine); }
+            //var clockRoutine = (Coroutine)AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
+            //if (clockRoutine != null) { realWorld.StopCoroutine(clockRoutine); }
+            stopRoutines();
             paused = true;
             runningCustomTime = false;
+        }
+
+        public static void stopRoutines() {
+            if (realWorld == null) return;
+            realWorld.StopCoroutine("runClock");
+            realWorld.StopCoroutine("newRunClock");
         }
 
         // Restarts time (Failsafe: Makes sure its not already restarted somehow)
         public static void unpauseTime() {
             var clockRoutineInfo = AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine");
-            var clockRoutine = (Coroutine)clockRoutineInfo.GetValue(realWorld);
-            if (clockRoutine != null) { realWorld.StopCoroutine(clockRoutine); }
+            //var clockRoutine = (Coroutine)clockRoutineInfo.GetValue(realWorld);
+            stopRoutines();
             clockRoutineInfo.SetValue(realWorld, realWorld.StartCoroutine(newRunClock(realWorld)));
             paused = false;
         }
