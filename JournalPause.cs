@@ -28,9 +28,11 @@ namespace JournalPause {
         public static bool pausedByHotkey;
         public static bool paused;
         public static bool runningCustomTime;
+        public static Coroutine customRoutine;
         public static bool journalOpen;
         public static bool forceClearNotification;
-
+        public static bool firstDayBeforeJournal;
+        
         public static bool FullVersion = false;
 
         private void Awake() {
@@ -82,13 +84,15 @@ namespace JournalPause {
 
             realWorld = __instance;
 
+            firstDayBeforeJournal = !TownManager.manage.journalUnlocked;
+                
             // Clients in a multiplayer world should not be able to stop time at all
             if (!realWorld.isServer) return true;
 
             timeSpeedInputs();
             
             // Pauses the game using a hotkey instead of the journal
-            if (FullVersion && Input.GetKeyDown(pauseHotkey.Value)) {
+            if (FullVersion && !firstDayBeforeJournal && Input.GetKeyDown(pauseHotkey.Value)) {
                 
                 pausedByHotkey = !pausedByHotkey;
                 
@@ -111,12 +115,12 @@ namespace JournalPause {
             
             // Ensures time is stopped if it's supposed to be paused and started if its not
             var clockRoutine = (Coroutine) AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
-            if (paused && clockRoutine != null) { pauseTime(); }
-            else if (!paused && clockRoutine == null) { unpauseTime(); }
+            if (paused && clockRoutine != null && !firstDayBeforeJournal) { pauseTime(); }
+            else if (!paused && clockRoutine == null && !firstDayBeforeJournal) { unpauseTime(); }
 
             // If the game is not paused but our custom coroutine isn't running, then time speed isn't correct possibly
             // So, ensure our routine is the one that's playing
-            if (!paused && !runningCustomTime) {
+            if (!paused && !runningCustomTime && !firstDayBeforeJournal) {
                 pauseTime();
                 unpauseTime();
             }
@@ -161,7 +165,7 @@ namespace JournalPause {
         // Increasing or decreasing the speed of time with hotkeys
         public static void timeSpeedInputs() {
 
-            if (!FullVersion) return;
+            if (!FullVersion || firstDayBeforeJournal) return;
             
             var increaseSpeed = Input.GetKeyDown(increaseTimeSpeedHotkey.Value);
             var decreaseSpeed = Input.GetKeyDown(decreaseTimeSpeedHotkey.Value);
@@ -279,13 +283,11 @@ namespace JournalPause {
             pauseTime();
             
             return true;
-
         }
 
         // Stops the flow of time
         public static void pauseTime() {
-            //var clockRoutine = (Coroutine)AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
-            //if (clockRoutine != null) { realWorld.StopCoroutine(clockRoutine); }
+            if (firstDayBeforeJournal) return;
             stopRoutines();
             paused = true;
             runningCustomTime = false;
@@ -293,16 +295,18 @@ namespace JournalPause {
 
         public static void stopRoutines() {
             if (realWorld == null) return;
-            realWorld.StopCoroutine("runClock");
-            realWorld.StopCoroutine("newRunClock");
+            var clockRoutine = (Coroutine)AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
+            if (clockRoutine != null) { realWorld.StopCoroutine(clockRoutine); }
+            if (customRoutine != null) realWorld.StopCoroutine(customRoutine);
         }
 
         // Restarts time (Failsafe: Makes sure its not already restarted somehow)
         public static void unpauseTime() {
+            if (firstDayBeforeJournal) return;
             var clockRoutineInfo = AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine");
-            //var clockRoutine = (Coroutine)clockRoutineInfo.GetValue(realWorld);
             stopRoutines();
-            clockRoutineInfo.SetValue(realWorld, realWorld.StartCoroutine(newRunClock(realWorld)));
+            customRoutine = realWorld.StartCoroutine(newRunClock(realWorld));
+            clockRoutineInfo.SetValue(realWorld, customRoutine);
             paused = false;
         }
         
