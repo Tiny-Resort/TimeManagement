@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using BepInEx;
 using BepInEx.Configuration;
@@ -17,12 +18,32 @@ namespace JournalPause {
     public class JournalPause : BaseUnityPlugin {
         
         public const string pluginGuid = "tinyresort.dinkum.journalpause";
-        public const string pluginName = "Journal Pause";
-        public const string pluginVersion = "1.0.5";
+        public const string pluginName = "Time Management";
+        public const string pluginVersion = "1.1.5";
         public static RealWorldTimeLight realWorld;
+        public static ConfigEntry<KeyCode> pauseHotkey;
+        public static ConfigEntry<KeyCode> increaseTimeSpeedHotkey;
+        public static ConfigEntry<KeyCode> decreaseTimeSpeedHotkey;
+        public static float timeSpeed = 0.5f;
+        public static bool pausedByHotkey;
+        public static bool paused;
+        public static bool runningCustomTime;
+        public static bool journalOpen;
+        public static bool forceClearNotification;
+
+        public static bool FullVersion = false;
 
         private void Awake() {
 
+            #region Configuration
+            if (FullVersion) {
+                pauseHotkey = Config.Bind<KeyCode>("Keybinds", "Pause", KeyCode.F9, "Unity KeyCode used for pausing the game.");
+                increaseTimeSpeedHotkey = Config.Bind<KeyCode>("Keybinds", "IncreaseTimeSpeed", KeyCode.KeypadPlus, "Unity KeyCode used for increasing the current time speed.");
+                decreaseTimeSpeedHotkey = Config.Bind<KeyCode>("Keybinds", "DecreaseTimeSpeed", KeyCode.KeypadMinus, "Unity KeyCode used for decreasing the current time speed.");
+                timeSpeed = Config.Bind<float>("Speed", "TimeSpeed", 0.5f, "How many minutes of in-game time should pass per second. This default is the game's default. Higher values will result is faster, shorter days. Lower values will result in longer, slower days. A value of 1 will be twice as fast as the default game speed. A value of 0.25 will be half as fast as the default game speed.").Value;
+            }
+            #endregion
+            
             #region Logging
             ManualLogSource logger = Logger;
 
@@ -43,6 +64,12 @@ namespace JournalPause {
             MethodInfo openSubMenu = AccessTools.Method(typeof(MenuButtonsTop), "openSubMenu");
             MethodInfo openSubMenuPatch = AccessTools.Method(typeof(JournalPause), "openSubMenuPatch");
 
+            if (FullVersion) {
+                MethodInfo makeTopNotification = AccessTools.Method(typeof(NotificationManager), "makeTopNotification");
+                MethodInfo makeTopNotificationPrefix = AccessTools.Method(typeof(JournalPause), "makeTopNotificationPrefix");
+                harmony.Patch(makeTopNotification, new HarmonyMethod(makeTopNotificationPrefix));
+            }
+
             harmony.Patch(update, new HarmonyMethod(updatePatch));
             harmony.Patch(closeSubMenu, new HarmonyMethod(closeSubMenuPatch));
             harmony.Patch(openSubMenu, new HarmonyMethod(openSubMenuPatch));
@@ -52,37 +79,193 @@ namespace JournalPause {
 
         // Gets a reference to the time manager class so that we can reference and set the clock routine easily
         private static bool updatePatch(RealWorldTimeLight __instance) {
+
             realWorld = __instance;
+
+            // Clients in a multiplayer world should not be able to stop time at all
+            if (!realWorld.isServer) return true;
+
+            timeSpeedInputs();
+            
+            // Pauses the game using a hotkey instead of the journal
+            if (FullVersion && Input.GetKeyDown(pauseHotkey.Value)) {
+                
+                pausedByHotkey = !pausedByHotkey;
+                
+                // If pausing by hotkey now, make sure the game is paused
+                if (pausedByHotkey) {
+                    if (!paused) { pauseTime(); }
+                    forceClearNotification = true;
+                    NotificationManager.manage.makeTopNotification("Time Management", "Now PAUSED");
+                } 
+                
+                // If unpausing by hotkey, unpause the game unless the journal is open
+                else {
+                    if (paused && !journalOpen) { unpauseTime(); }
+                    forceClearNotification = true;
+                    if (journalOpen) { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED (Still paused while in the journal)"); }
+                    else { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED"); }
+                }
+                
+            }
+            
+            // Ensures time is stopped if it's supposed to be paused and started if its not
+            var clockRoutine = (Coroutine) AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
+            if (paused && clockRoutine != null) { pauseTime(); }
+            else if (!paused && clockRoutine == null) { unpauseTime(); }
+
+            // If the game is not paused but our custom coroutine isn't running, then time speed isn't correct possibly
+            // So, ensure our routine is the one that's playing
+            if (!paused && !runningCustomTime) {
+                pauseTime();
+                unpauseTime();
+            }
+            
             return true;
         }
 
         // Same as normal time routine, but allows us to start and stop on demand
         public static IEnumerator newRunClock(RealWorldTimeLight __instance) {
-            
-            float currentSpeed = (float)AccessTools.Field(typeof(RealWorldTimeLight), "currentSpeed").GetValue(__instance);
 
-            while (true)
-            {
+            // Ensures that our function is the one being used
+            runningCustomTime = true;
+
+            while (true) {
+                
                 __instance.clockTick();
                 __instance.clockTickEvent.Invoke();
-                yield return new WaitForSeconds(currentSpeed);
-                if (__instance.currentHour != 0)
-                {
-                    __instance.currentMinute++;
-                }
-                if (__instance.currentMinute >= 60)
-                {
+
+                // Combines our setting and the game's speed in a way that ensures in-game time manipulation still works but relative to our speed
+                float currentSpeed = (float) AccessTools.Field(typeof(RealWorldTimeLight), "currentSpeed").GetValue(__instance);
+                float minuteDelay = (1f / timeSpeed) * (currentSpeed / 2f);
+                yield return new WaitForSeconds(minuteDelay);
+                
+                // Counts up the minutes
+                if (__instance.currentHour != 0) { __instance.currentMinute++; }
+                
+                // If it's a new hour, alert clients
+                if (__instance.currentMinute >= 60) {
                     __instance.currentMinute = 0;
-                    if (__instance.currentHour != 0)
-                    {
-                        __instance.NetworkcurrentHour = __instance.currentHour + 1;
-                    }
+                    if (__instance.currentHour != 0) { __instance.NetworkcurrentHour = __instance.currentHour + 1; }
                 }
-                if (__instance.currentMinute == 0 || __instance.currentMinute == 15 || __instance.currentMinute == 30 || __instance.currentMinute == 45)
-                {
+                
+                // Run any necessary tasks
+                if (__instance.currentMinute == 0 || __instance.currentMinute == 15 || __instance.currentMinute == 30 || __instance.currentMinute == 45) {
                     __instance.taskChecker.Invoke();
                 }
+                
             }
+            
+        }
+
+        // Increasing or decreasing the speed of time with hotkeys
+        public static void timeSpeedInputs() {
+
+            if (!FullVersion) return;
+            
+            var increaseSpeed = Input.GetKeyDown(increaseTimeSpeedHotkey.Value);
+            var decreaseSpeed = Input.GetKeyDown(decreaseTimeSpeedHotkey.Value);
+
+            // Increasing the speed of time, keeping it below 20 minutes per second
+            if (increaseSpeed || decreaseSpeed) {
+
+                var text = "Time speed ";
+                
+                // Decreasing Speed
+                if (increaseSpeed) {
+
+                    if (timeSpeed >= 60f) {
+                        timeSpeed = 60f;
+                        text += "at maximum!";
+                    }
+
+                    else {
+
+                        float increment;
+                        if (timeSpeed >= 10) { increment = 5; }
+                        else if (timeSpeed >= 4) { increment = 1; }
+                        else if (timeSpeed >= 1) { increment = 0.5f; }
+                        else if (timeSpeed >= 0.5f) { increment = 0.1f; }
+                        else if (timeSpeed >= 0.2f) { increment = 0.05f; }
+                        else { increment = 0.01f; }
+
+                        timeSpeed = (Mathf.Round(timeSpeed / increment) * increment) + increment;
+                        text += "increased to " + timeSpeed + " min/sec";
+                        
+                    }
+
+                }
+                
+                // Increasing Speed
+                else {
+
+                    if (timeSpeed <= 0.05f) {
+                        timeSpeed = 0.05f;
+                        text += "at minimum!";
+                    }
+
+                    else {
+
+                        float increment;
+                        if (timeSpeed >= 11) { increment = 2; }
+                        else if (timeSpeed >= 4.5f) { increment = 1; }
+                        else if (timeSpeed >= 1.25f) { increment = 0.5f; }
+                        else if (timeSpeed >= 0.55f) { increment = 0.1f; }
+                        else if (timeSpeed >= 0.21f) { increment = 0.05f; }
+                        else { increment = 0.01f; }
+
+                        timeSpeed = (Mathf.Round(timeSpeed / increment) * increment) - increment;
+                        text += "decreased to " + timeSpeed + " min/sec";
+                        
+                    }
+
+                }
+
+                // Clamps time speed to keep it from going wild
+                timeSpeed = Mathf.Clamp(timeSpeed, 0.05f, 60f);
+                forceClearNotification = true;
+                NotificationManager.manage.makeTopNotification("Time Management", text);
+                
+            }
+            
+        }
+
+        // Forcibly clears the top notification so that it can be replaced immediately
+        [HarmonyPrefix]
+        public static bool makeTopNotificationPrefix(NotificationManager __instance) {
+            
+            if (forceClearNotification) {
+                forceClearNotification = false;
+                
+                var toNotify = (List<string>)AccessTools.Field(typeof(NotificationManager), "toNotify").GetValue(__instance);
+                var subTextNot = (List<string>)AccessTools.Field(typeof(NotificationManager), "subTextNot").GetValue(__instance);
+                var soundToPlay = (List<ASound>)AccessTools.Field(typeof(NotificationManager), "soundToPlay").GetValue(__instance);
+                var topNotificationRunning = AccessTools.Field(typeof(NotificationManager), "topNotificationRunning");
+                var topNotificationRunningRoutine = topNotificationRunning.GetValue(__instance);
+                
+                // Clears existing notifications in the queue
+                toNotify.Clear();
+                subTextNot.Clear();
+                soundToPlay.Clear();
+
+                // Stops the current coroutine from continuing
+                if (topNotificationRunningRoutine != null) {
+                    __instance.StopCoroutine((Coroutine) topNotificationRunningRoutine);
+                    topNotificationRunning.SetValue(__instance, null);
+                }
+                
+                // Resets all animations related to the notificatin bubble appearing/disappearing
+                __instance.StopCoroutine("closeWithMask");
+                __instance.topNotification.StopAllCoroutines();
+                var Anim = __instance.topNotification.GetComponent<WindowAnimator>();
+                Anim.StopAllCoroutines();
+                Anim.maskChild.enabled = false;
+                Anim.contents.gameObject.SetActive(false);
+                Anim.gameObject.SetActive(false);
+                
+                return true;
+                
+            } else return true;
         }
         
         // Stops the time routine from running when the journal is opened
@@ -92,10 +275,28 @@ namespace JournalPause {
             // on clients and preventing the player from opening their milestone manager (ESC key)
             if (!realWorld.isServer) return true;
 
-            var clockRoutine = (Coroutine)AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
-            realWorld.StopCoroutine(clockRoutine);
+            journalOpen = true;
+            pauseTime();
+            
             return true;
 
+        }
+
+        // Stops the flow of time
+        public static void pauseTime() {
+            var clockRoutine = (Coroutine)AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
+            if (clockRoutine != null) { realWorld.StopCoroutine(clockRoutine); }
+            paused = true;
+            runningCustomTime = false;
+        }
+
+        // Restarts time (Failsafe: Makes sure its not already restarted somehow)
+        public static void unpauseTime() {
+            var clockRoutineInfo = AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine");
+            var clockRoutine = (Coroutine)clockRoutineInfo.GetValue(realWorld);
+            if (clockRoutine != null) { realWorld.StopCoroutine(clockRoutine); }
+            clockRoutineInfo.SetValue(realWorld, realWorld.StartCoroutine(newRunClock(realWorld)));
+            paused = false;
         }
         
         // Restarts the time routine when the journal is closed
@@ -115,12 +316,12 @@ namespace JournalPause {
                 (PhotoManager.manage.photoTabOpen && PhotoManager.manage.blownUpWindow.activeInHierarchy)) {
                 return true;
             }
+
+            journalOpen = false;
+
+            // Only unpause time if the pause hotkey isn't toggled on
+            if (!pausedByHotkey) unpauseTime();
             
-            // Restarts time (Failsafe: Makes sure its not already restarted somehow)
-            var clockRoutineInfo = (FieldInfo) AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine");
-            var clockRoutine = (Coroutine) clockRoutineInfo.GetValue(realWorld);
-            if (clockRoutine != null) realWorld.StopCoroutine(clockRoutine);
-            clockRoutineInfo.SetValue(realWorld, realWorld.StartCoroutine(newRunClock(realWorld)));
             return true;
 
         }
