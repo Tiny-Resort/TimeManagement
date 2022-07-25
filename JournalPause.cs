@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.DirectoryServices.ActiveDirectory;
 using System.Linq;
 using BepInEx;
 using BepInEx.Configuration;
@@ -20,6 +21,7 @@ namespace JournalPause {
         public const string pluginGuid = "tinyresort.dinkum.journalpause";
         public const string pluginName = "Time Management";
         public const string pluginVersion = "1.1.5";
+        public static ManualLogSource StaticLogger;
         public static RealWorldTimeLight realWorld;
         public static ConfigEntry<KeyCode> pauseHotkey;
         public static ConfigEntry<KeyCode> increaseTimeSpeedHotkey;
@@ -27,15 +29,18 @@ namespace JournalPause {
         public static float timeSpeed = 0.5f;
         public static bool pausedByHotkey;
         public static bool paused;
-        public static bool runningCustomTime;
         public static Coroutine customRoutine;
         public static bool journalOpen;
         public static bool forceClearNotification;
         public static bool firstDayBeforeJournal;
+        public static float timeSpeedDefault;
+        public static bool inBetweenDays;
         
         public static bool FullVersion = false;
 
         private void Awake() {
+
+            StaticLogger = Logger;
 
             #region Configuration
             if (FullVersion) {
@@ -43,6 +48,7 @@ namespace JournalPause {
                 increaseTimeSpeedHotkey = Config.Bind<KeyCode>("Keybinds", "IncreaseTimeSpeed", KeyCode.KeypadPlus, "Unity KeyCode used for increasing the current time speed.");
                 decreaseTimeSpeedHotkey = Config.Bind<KeyCode>("Keybinds", "DecreaseTimeSpeed", KeyCode.KeypadMinus, "Unity KeyCode used for decreasing the current time speed.");
                 timeSpeed = Config.Bind<float>("Speed", "TimeSpeed", 0.5f, "How many minutes of in-game time should pass per second. This default is the game's default. Higher values will result is faster, shorter days. Lower values will result in longer, slower days. A value of 1 will be twice as fast as the default game speed. A value of 0.25 will be half as fast as the default game speed.").Value;
+                timeSpeedDefault = timeSpeed;
             }
             #endregion
             
@@ -65,16 +71,19 @@ namespace JournalPause {
             MethodInfo closeSubMenuPatch = AccessTools.Method(typeof(JournalPause), "closeSubMenuPatch");
             MethodInfo openSubMenu = AccessTools.Method(typeof(MenuButtonsTop), "openSubMenu");
             MethodInfo openSubMenuPatch = AccessTools.Method(typeof(JournalPause), "openSubMenuPatch");
+            
+            MethodInfo confirmQuitButton = AccessTools.Method(typeof(MenuButtonsTop), "ConfirmQuitButton");
+            MethodInfo confirmQuitButtonPrefix = AccessTools.Method(typeof(JournalPause), "confirmQuitButtonPrefix");
 
             if (FullVersion) {
                 MethodInfo makeTopNotification = AccessTools.Method(typeof(NotificationManager), "makeTopNotification");
                 MethodInfo makeTopNotificationPrefix = AccessTools.Method(typeof(JournalPause), "makeTopNotificationPrefix");
                 harmony.Patch(makeTopNotification, new HarmonyMethod(makeTopNotificationPrefix));
             }
-
             harmony.Patch(update, new HarmonyMethod(updatePatch));
             harmony.Patch(closeSubMenu, new HarmonyMethod(closeSubMenuPatch));
             harmony.Patch(openSubMenu, new HarmonyMethod(openSubMenuPatch));
+            harmony.Patch(confirmQuitButton, new HarmonyMethod(confirmQuitButtonPrefix));
             #endregion
 
         }
@@ -83,9 +92,9 @@ namespace JournalPause {
         private static bool updatePatch(RealWorldTimeLight __instance) {
 
             realWorld = __instance;
-
+            
+            inBetweenDays = CharLevelManager.manage.levelUpWindowOpen;
             firstDayBeforeJournal = !TownManager.manage.journalUnlocked;
-                
             // Clients in a multiplayer world should not be able to stop time at all
             if (!realWorld.isServer) return true;
 
@@ -98,14 +107,21 @@ namespace JournalPause {
                 
                 // If pausing by hotkey now, make sure the game is paused
                 if (pausedByHotkey) {
-                    if (!paused) { pauseTime(); }
+                    if (!paused)
+                    {
+                        pauseTime();
+                    }
                     forceClearNotification = true;
                     NotificationManager.manage.makeTopNotification("Time Management", "Now PAUSED");
                 } 
                 
                 // If unpausing by hotkey, unpause the game unless the journal is open
                 else {
-                    if (paused && !journalOpen) { unpauseTime(); }
+                    if (paused && !journalOpen)
+                    {
+                        //StaticLogger.LogInfo("unpauseTime() --- Paused and !JournalOpen");
+                        unpauseTime();
+                    }
                     forceClearNotification = true;
                     if (journalOpen) { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED (Still paused while in the journal)"); }
                     else { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED"); }
@@ -115,12 +131,18 @@ namespace JournalPause {
             
             // Ensures time is stopped if it's supposed to be paused and started if its not
             var clockRoutine = (Coroutine) AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
-            if (paused && clockRoutine != null && !firstDayBeforeJournal) { pauseTime(); }
+            if (paused && clockRoutine != null && !firstDayBeforeJournal)
+            {
+                //StaticLogger.LogInfo("Pause Time Checks 1");
+                pauseTime();
+            }
             else if (!paused && clockRoutine == null && !firstDayBeforeJournal) { unpauseTime(); }
 
             // If the game is not paused but our custom coroutine isn't running, then time speed isn't correct possibly
             // So, ensure our routine is the one that's playing
             if (!paused && customRoutine != clockRoutine && !firstDayBeforeJournal) {
+                //StaticLogger.LogInfo("Pause Time Checks 2");
+
                 pauseTime();
                 unpauseTime();
             }
@@ -130,10 +152,7 @@ namespace JournalPause {
 
         // Same as normal time routine, but allows us to start and stop on demand
         public static IEnumerator newRunClock(RealWorldTimeLight __instance) {
-
-            // Ensures that our function is the one being used
-            runningCustomTime = true;
-
+            //StaticLogger.LogInfo("New Run Clock");
             while (true) {
                 
                 __instance.clockTick();
@@ -274,12 +293,14 @@ namespace JournalPause {
         
         // Stops the time routine from running when the journal is opened
         public static bool openSubMenuPatch() {
-
+            //StaticLogger.LogInfo("Open Sub Menu Patch");
             // Keeps it from running on clients in a multiplayer world due to clockRoutine not running
             // on clients and preventing the player from opening their milestone manager (ESC key)
             if (!realWorld.isServer) return true;
 
             journalOpen = true;
+            
+
             pauseTime();
             
             return true;
@@ -287,34 +308,51 @@ namespace JournalPause {
 
         // Stops the flow of time
         public static void pauseTime() {
-            if (firstDayBeforeJournal) return;
+            //StaticLogger.LogInfo("Inside Pause Time");
+            if (firstDayBeforeJournal || inBetweenDays) return;
             stopRoutines();
             paused = true;
-            runningCustomTime = false;
+            
         }
 
         public static void stopRoutines() {
+            //StaticLogger.LogInfo("Stop Routines");
             if (realWorld == null) return;
-            var clockRoutine = (Coroutine)AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
-            if (clockRoutine != null) { realWorld.StopCoroutine(clockRoutine); }
-            if (customRoutine != null) realWorld.StopCoroutine(customRoutine);
+            var clockRoutineInfo = AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine");
+            var clockRoutine = (Coroutine)clockRoutineInfo.GetValue(realWorld);
+            if (clockRoutine != null)
+            {
+                realWorld.StopCoroutine(clockRoutine);
+                clockRoutineInfo.SetValue(realWorld,null);
+            }
+
+            if (customRoutine != null)
+            {
+                realWorld.StopCoroutine(customRoutine);
+                customRoutine = null;
+            }
             realWorld.StopCoroutine("runClock");
+            
+
         }
 
         // Restarts time (Failsafe: Makes sure its not already restarted somehow)
         public static void unpauseTime() {
-            if (firstDayBeforeJournal) return;
+           // StaticLogger.LogInfo("Unpause Time");
+            if (firstDayBeforeJournal || inBetweenDays ) return;
             var clockRoutineInfo = AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine");
             stopRoutines();
             customRoutine = realWorld.StartCoroutine(newRunClock(realWorld));
             clockRoutineInfo.SetValue(realWorld, customRoutine);
             paused = false;
+            
+
         }
         
         // Restarts the time routine when the journal is closed
         // Runs a custom time routine just because its harder to get the original routine to run again
         public static bool closeSubMenuPatch(MenuButtonsTop __instance) {
-
+            //StaticLogger.LogInfo("closeSubMenuPatch");
             // Keeps it from running on clients in a multiplayer world due to clockRoutine not running
             // on clients and preventing the player from opening their milestone manager (ESC key)
             if (!realWorld.isServer) return true;
@@ -338,6 +376,17 @@ namespace JournalPause {
 
         }
 
+        [HarmonyPostfix]
+        public static void confirmQuitButtonPrefix()
+        {
+            stopRoutines();
+            paused = false;
+            pausedByHotkey = false;
+            journalOpen = false;
+            timeSpeed = timeSpeedDefault;
+            //StaticLogger.LogInfo("Inside ConfirmQuitButtonPostfix");
+        }
+        
     }
 
 }
