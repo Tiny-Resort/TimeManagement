@@ -20,7 +20,7 @@ namespace JournalPause {
         
         public const string pluginGuid = "tinyresort.dinkum.journalpause";
         public const string pluginName = "Time Management";
-        public const string pluginVersion = "1.1.5";
+        public const string pluginVersion = "1.2.0";
         public static ManualLogSource StaticLogger;
         public static RealWorldTimeLight realWorld;
         public static ConfigEntry<KeyCode> pauseHotkey;
@@ -36,7 +36,7 @@ namespace JournalPause {
         public static float timeSpeedDefault;
         public static bool inBetweenDays;
         
-        public static bool FullVersion = false;
+        public static bool FullVersion = true;
 
         private void Awake() {
 
@@ -299,8 +299,6 @@ namespace JournalPause {
             if (!realWorld.isServer) return true;
 
             journalOpen = true;
-            
-
             pauseTime();
             
             return true;
