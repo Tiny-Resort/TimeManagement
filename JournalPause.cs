@@ -11,6 +11,7 @@ using Mirror;
 using UnityEngine;
 using HarmonyLib;
 using System.Reflection;
+using UnityEngine.InputSystem;
 
 
 namespace JournalPause {
@@ -20,12 +21,13 @@ namespace JournalPause {
         
         public const string pluginGuid = "tinyresort.dinkum.journalpause";
         public const string pluginName = "Time Management";
-        public const string pluginVersion = "1.2.0";
+        public const string pluginVersion = "1.2.1";
         public static ManualLogSource StaticLogger;
         public static RealWorldTimeLight realWorld;
         public static ConfigEntry<KeyCode> pauseHotkey;
         public static ConfigEntry<KeyCode> increaseTimeSpeedHotkey;
         public static ConfigEntry<KeyCode> decreaseTimeSpeedHotkey;
+        public static ConfigEntry<bool> disableKeybinds;
         public static float timeSpeed = 0.5f;
         public static bool pausedByHotkey;
         public static bool paused;
@@ -35,6 +37,7 @@ namespace JournalPause {
         public static bool firstDayBeforeJournal;
         public static float timeSpeedDefault;
         public static bool inBetweenDays;
+        
         
         public static bool FullVersion = true;
 
@@ -48,10 +51,11 @@ namespace JournalPause {
                 increaseTimeSpeedHotkey = Config.Bind<KeyCode>("Keybinds", "IncreaseTimeSpeed", KeyCode.KeypadPlus, "Unity KeyCode used for increasing the current time speed.");
                 decreaseTimeSpeedHotkey = Config.Bind<KeyCode>("Keybinds", "DecreaseTimeSpeed", KeyCode.KeypadMinus, "Unity KeyCode used for decreasing the current time speed.");
                 timeSpeed = Config.Bind<float>("Speed", "TimeSpeed", 0.5f, "How many minutes of in-game time should pass per second. This default is the game's default. Higher values will result is faster, shorter days. Lower values will result in longer, slower days. A value of 1 will be twice as fast as the default game speed. A value of 0.25 will be half as fast as the default game speed.").Value;
-                timeSpeedDefault = timeSpeed;
+                disableKeybinds = Config.Bind<bool>("Speed", "DisableKeybinds", false, "Disables the use of the keybinds for increasing and decreasing time.");
             }
+            timeSpeedDefault = timeSpeed;
             #endregion
-            
+
             #region Logging
             ManualLogSource logger = Logger;
 
@@ -184,14 +188,14 @@ namespace JournalPause {
         // Increasing or decreasing the speed of time with hotkeys
         public static void timeSpeedInputs() {
 
-            if (!FullVersion || firstDayBeforeJournal) return;
+            if (!FullVersion || firstDayBeforeJournal || disableKeybinds.Value) return;
             
             var increaseSpeed = Input.GetKeyDown(increaseTimeSpeedHotkey.Value);
             var decreaseSpeed = Input.GetKeyDown(decreaseTimeSpeedHotkey.Value);
 
             // Increasing the speed of time, keeping it below 20 minutes per second
             if (increaseSpeed || decreaseSpeed) {
-
+                StaticLogger.LogInfo("Test if I got in here");
                 var text = "Time speed ";
                 
                 // Decreasing Speed
