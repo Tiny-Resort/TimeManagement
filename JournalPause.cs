@@ -120,7 +120,7 @@ namespace JournalPause {
 
             // If the game is not paused but our custom coroutine isn't running, then time speed isn't correct possibly
             // So, ensure our routine is the one that's playing
-            if (!paused && !runningCustomTime && !firstDayBeforeJournal) {
+            if (!paused && customRoutine != clockRoutine && !firstDayBeforeJournal) {
                 pauseTime();
                 unpauseTime();
             }
@@ -298,6 +298,7 @@ namespace JournalPause {
             var clockRoutine = (Coroutine)AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
             if (clockRoutine != null) { realWorld.StopCoroutine(clockRoutine); }
             if (customRoutine != null) realWorld.StopCoroutine(customRoutine);
+            realWorld.StopCoroutine("runClock");
         }
 
         // Restarts time (Failsafe: Makes sure its not already restarted somehow)

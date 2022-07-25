@@ -49,9 +49,6 @@
     <Reference Include="BepInEx.Unity">
       <HintPath>Libraries\BepInEx.Unity.dll</HintPath>
     </Reference>
-    <Reference Include="me.arwent.AutoPickup">
-      <HintPath>Libraries\me.arwent.AutoPickup.dll</HintPath>
-    </Reference>
     <Reference Include="Mirror, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
       <HintPath>Libraries\Mirror.dll</HintPath>
 	</Reference>
