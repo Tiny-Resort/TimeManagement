@@ -96,6 +96,9 @@
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Xml.XPath.XDocument" />
+    <Reference Include="TinyResortTools">
+      <HintPath>Libraries\TinyResortTools.dll</HintPath>
+    </Reference>
     <Reference Include="Unity.Analytics.DataPrivacy">
       <HintPath>Libraries\Unity.Analytics.DataPrivacy.dll</HintPath>
     </Reference>

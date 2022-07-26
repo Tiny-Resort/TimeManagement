@@ -11,14 +11,16 @@ using Mirror;
 using UnityEngine;
 using HarmonyLib;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using UnityEngine.InputSystem;
-
+using TR;
+using TR.Tools;
 
 namespace JournalPause {
-    
+
     [BepInPlugin(pluginGuid, pluginName, pluginVersion)]
     public class JournalPause : BaseUnityPlugin {
-        
+
         public const string pluginGuid = "tinyresort.dinkum.journalpause";
         public const string pluginName = "Time Management";
         public const string pluginVersion = "1.2.1";
@@ -33,19 +35,19 @@ namespace JournalPause {
         public static bool paused;
         public static Coroutine customRoutine;
         public static bool journalOpen;
-        public static bool forceClearNotification;
         public static bool firstDayBeforeJournal;
         public static float timeSpeedDefault;
         public static bool inBetweenDays;
-        
-        
         public static bool FullVersion = true;
+        public static string myModGameVersion;
+        public static bool firstWorkingPass = false;
 
         private void Awake() {
 
             StaticLogger = Logger;
 
             #region Configuration
+
             if (FullVersion) {
                 pauseHotkey = Config.Bind<KeyCode>("Keybinds", "Pause", KeyCode.F9, "Unity KeyCode used for pausing the game.");
                 increaseTimeSpeedHotkey = Config.Bind<KeyCode>("Keybinds", "IncreaseTimeSpeed", KeyCode.KeypadPlus, "Unity KeyCode used for increasing the current time speed.");
@@ -54,18 +56,22 @@ namespace JournalPause {
                 disableKeybinds = Config.Bind<bool>("Speed", "DisableKeybinds", false, "Disables the use of the keybinds for increasing and decreasing time.");
             }
             timeSpeedDefault = timeSpeed;
+
             #endregion
 
             #region Logging
+
             ManualLogSource logger = Logger;
 
             bool flag;
             BepInExInfoLogInterpolatedStringHandler handler = new BepInExInfoLogInterpolatedStringHandler(18, 1, out flag);
             if (flag) { handler.AppendLiteral("Plugin " + pluginGuid + " (v" + pluginVersion + ") loaded!"); }
             logger.LogInfo(handler);
+
             #endregion
 
             #region Patching
+
             Harmony harmony = new Harmony(pluginGuid);
 
             MethodInfo update = AccessTools.Method(typeof(RealWorldTimeLight), "Update");
@@ -75,68 +81,84 @@ namespace JournalPause {
             MethodInfo closeSubMenuPatch = AccessTools.Method(typeof(JournalPause), "closeSubMenuPatch");
             MethodInfo openSubMenu = AccessTools.Method(typeof(MenuButtonsTop), "openSubMenu");
             MethodInfo openSubMenuPatch = AccessTools.Method(typeof(JournalPause), "openSubMenuPatch");
-            
+
             MethodInfo confirmQuitButton = AccessTools.Method(typeof(MenuButtonsTop), "ConfirmQuitButton");
             MethodInfo confirmQuitButtonPrefix = AccessTools.Method(typeof(JournalPause), "confirmQuitButtonPrefix");
 
-            if (FullVersion) {
-                MethodInfo makeTopNotification = AccessTools.Method(typeof(NotificationManager), "makeTopNotification");
-                MethodInfo makeTopNotificationPrefix = AccessTools.Method(typeof(JournalPause), "makeTopNotificationPrefix");
-                harmony.Patch(makeTopNotification, new HarmonyMethod(makeTopNotificationPrefix));
-            }
+            // if (FullVersion) {
+            //     MethodInfo makeTopNotification = AccessTools.Method(typeof(NotificationManager), "makeTopNotification");
+            //     MethodInfo makeTopNotificationPrefix = AccessTools.Method(typeof(JournalPause), "makeTopNotificationPrefix");
+            //     harmony.Patch(makeTopNotification, new HarmonyMethod(makeTopNotificationPrefix));
+            // }
             harmony.Patch(update, new HarmonyMethod(updatePatch));
             harmony.Patch(closeSubMenu, new HarmonyMethod(closeSubMenuPatch));
             harmony.Patch(openSubMenu, new HarmonyMethod(openSubMenuPatch));
             harmony.Patch(confirmQuitButton, new HarmonyMethod(confirmQuitButtonPrefix));
+
             #endregion
 
+        }
+
+        private void Update()
+        {
+            if (!firstWorkingPass) {
+                try {
+                    myModGameVersion = "v0.4.5";
+                    StaticLogger.LogInfo("Test");
+                    StaticLogger.LogInfo(
+                        TR.Tools.versionCheck.verifyGameVersions(myModGameVersion)
+                            ? "The game version match!"
+                            : "The game versions don't match!"
+                    );
+                    firstWorkingPass = !firstWorkingPass;
+                }
+                catch (MissingMethodException e) {
+                    StaticLogger.LogInfo(e);
+                }
+            }
         }
 
         // Gets a reference to the time manager class so that we can reference and set the clock routine easily
         private static bool updatePatch(RealWorldTimeLight __instance) {
 
             realWorld = __instance;
-            
+
             inBetweenDays = CharLevelManager.manage.levelUpWindowOpen;
             firstDayBeforeJournal = !TownManager.manage.journalUnlocked;
+
             // Clients in a multiplayer world should not be able to stop time at all
             if (!realWorld.isServer) return true;
 
             timeSpeedInputs();
-            
+
             // Pauses the game using a hotkey instead of the journal
             if (FullVersion && !firstDayBeforeJournal && Input.GetKeyDown(pauseHotkey.Value)) {
-                
+
                 pausedByHotkey = !pausedByHotkey;
-                
+
                 // If pausing by hotkey now, make sure the game is paused
                 if (pausedByHotkey) {
-                    if (!paused)
-                    {
-                        pauseTime();
-                    }
-                    forceClearNotification = true;
+                    if (!paused) { pauseTime(); }
+                    TRPlugin.forceClearNotification = true;
                     NotificationManager.manage.makeTopNotification("Time Management", "Now PAUSED");
-                } 
-                
+                }
+
                 // If unpausing by hotkey, unpause the game unless the journal is open
                 else {
-                    if (paused && !journalOpen)
-                    {
+                    if (paused && !journalOpen) {
                         //StaticLogger.LogInfo("unpauseTime() --- Paused and !JournalOpen");
                         unpauseTime();
                     }
-                    forceClearNotification = true;
+                    TRPlugin.forceClearNotification = true;
                     if (journalOpen) { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED (Still paused while in the journal)"); }
                     else { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED"); }
                 }
-                
+
             }
-            
+
             // Ensures time is stopped if it's supposed to be paused and started if its not
-            var clockRoutine = (Coroutine) AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
-            if (paused && clockRoutine != null && !firstDayBeforeJournal)
-            {
+            var clockRoutine = (Coroutine)AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine").GetValue(realWorld);
+            if (paused && clockRoutine != null && !firstDayBeforeJournal) {
                 //StaticLogger.LogInfo("Pause Time Checks 1");
                 pauseTime();
             }
@@ -150,7 +172,7 @@ namespace JournalPause {
                 pauseTime();
                 unpauseTime();
             }
-            
+
             return true;
         }
 
@@ -158,38 +180,36 @@ namespace JournalPause {
         public static IEnumerator newRunClock(RealWorldTimeLight __instance) {
             //StaticLogger.LogInfo("New Run Clock");
             while (true) {
-                
+
                 __instance.clockTick();
                 __instance.clockTickEvent.Invoke();
 
                 // Combines our setting and the game's speed in a way that ensures in-game time manipulation still works but relative to our speed
-                float currentSpeed = (float) AccessTools.Field(typeof(RealWorldTimeLight), "currentSpeed").GetValue(__instance);
+                float currentSpeed = (float)AccessTools.Field(typeof(RealWorldTimeLight), "currentSpeed").GetValue(__instance);
                 float minuteDelay = (1f / timeSpeed) * (currentSpeed / 2f);
                 yield return new WaitForSeconds(minuteDelay);
-                
+
                 // Counts up the minutes
                 if (__instance.currentHour != 0) { __instance.currentMinute++; }
-                
+
                 // If it's a new hour, alert clients
                 if (__instance.currentMinute >= 60) {
                     __instance.currentMinute = 0;
                     if (__instance.currentHour != 0) { __instance.NetworkcurrentHour = __instance.currentHour + 1; }
                 }
-                
+
                 // Run any necessary tasks
-                if (__instance.currentMinute == 0 || __instance.currentMinute == 15 || __instance.currentMinute == 30 || __instance.currentMinute == 45) {
-                    __instance.taskChecker.Invoke();
-                }
-                
+                if (__instance.currentMinute == 0 || __instance.currentMinute == 15 || __instance.currentMinute == 30 || __instance.currentMinute == 45) { __instance.taskChecker.Invoke(); }
+
             }
-            
+
         }
 
         // Increasing or decreasing the speed of time with hotkeys
         public static void timeSpeedInputs() {
 
             if (!FullVersion || firstDayBeforeJournal || disableKeybinds.Value) return;
-            
+
             var increaseSpeed = Input.GetKeyDown(increaseTimeSpeedHotkey.Value);
             var decreaseSpeed = Input.GetKeyDown(decreaseTimeSpeedHotkey.Value);
 
@@ -197,7 +217,7 @@ namespace JournalPause {
             if (increaseSpeed || decreaseSpeed) {
                 StaticLogger.LogInfo("Test if I got in here");
                 var text = "Time speed ";
-                
+
                 // Decreasing Speed
                 if (increaseSpeed) {
 
@@ -218,11 +238,11 @@ namespace JournalPause {
 
                         timeSpeed = (Mathf.Round(timeSpeed / increment) * increment) + increment;
                         text += "increased to " + timeSpeed + " min/sec";
-                        
+
                     }
 
                 }
-                
+
                 // Increasing Speed
                 else {
 
@@ -243,58 +263,20 @@ namespace JournalPause {
 
                         timeSpeed = (Mathf.Round(timeSpeed / increment) * increment) - increment;
                         text += "decreased to " + timeSpeed + " min/sec";
-                        
+
                     }
 
                 }
 
                 // Clamps time speed to keep it from going wild
                 timeSpeed = Mathf.Clamp(timeSpeed, 0.05f, 60f);
-                forceClearNotification = true;
+                TRPlugin.forceClearNotification = true;
                 NotificationManager.manage.makeTopNotification("Time Management", text);
-                
+
             }
-            
+
         }
 
-        // Forcibly clears the top notification so that it can be replaced immediately
-        [HarmonyPrefix]
-        public static bool makeTopNotificationPrefix(NotificationManager __instance) {
-            
-            if (forceClearNotification) {
-                forceClearNotification = false;
-                
-                var toNotify = (List<string>)AccessTools.Field(typeof(NotificationManager), "toNotify").GetValue(__instance);
-                var subTextNot = (List<string>)AccessTools.Field(typeof(NotificationManager), "subTextNot").GetValue(__instance);
-                var soundToPlay = (List<ASound>)AccessTools.Field(typeof(NotificationManager), "soundToPlay").GetValue(__instance);
-                var topNotificationRunning = AccessTools.Field(typeof(NotificationManager), "topNotificationRunning");
-                var topNotificationRunningRoutine = topNotificationRunning.GetValue(__instance);
-                
-                // Clears existing notifications in the queue
-                toNotify.Clear();
-                subTextNot.Clear();
-                soundToPlay.Clear();
-
-                // Stops the current coroutine from continuing
-                if (topNotificationRunningRoutine != null) {
-                    __instance.StopCoroutine((Coroutine) topNotificationRunningRoutine);
-                    topNotificationRunning.SetValue(__instance, null);
-                }
-                
-                // Resets all animations related to the notificatin bubble appearing/disappearing
-                __instance.StopCoroutine("closeWithMask");
-                __instance.topNotification.StopAllCoroutines();
-                var Anim = __instance.topNotification.GetComponent<WindowAnimator>();
-                Anim.StopAllCoroutines();
-                Anim.maskChild.enabled = false;
-                Anim.contents.gameObject.SetActive(false);
-                Anim.gameObject.SetActive(false);
-                
-                return true;
-                
-            } else return true;
-        }
-        
         // Stops the time routine from running when the journal is opened
         public static bool openSubMenuPatch() {
             //StaticLogger.LogInfo("Open Sub Menu Patch");
@@ -304,7 +286,7 @@ namespace JournalPause {
 
             journalOpen = true;
             pauseTime();
-            
+
             return true;
         }
 
@@ -314,7 +296,7 @@ namespace JournalPause {
             if (firstDayBeforeJournal || inBetweenDays) return;
             stopRoutines();
             paused = true;
-            
+
         }
 
         public static void stopRoutines() {
@@ -322,35 +304,31 @@ namespace JournalPause {
             if (realWorld == null) return;
             var clockRoutineInfo = AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine");
             var clockRoutine = (Coroutine)clockRoutineInfo.GetValue(realWorld);
-            if (clockRoutine != null)
-            {
+            if (clockRoutine != null) {
                 realWorld.StopCoroutine(clockRoutine);
-                clockRoutineInfo.SetValue(realWorld,null);
+                clockRoutineInfo.SetValue(realWorld, null);
             }
 
-            if (customRoutine != null)
-            {
+            if (customRoutine != null) {
                 realWorld.StopCoroutine(customRoutine);
                 customRoutine = null;
             }
             realWorld.StopCoroutine("runClock");
-            
 
         }
 
         // Restarts time (Failsafe: Makes sure its not already restarted somehow)
         public static void unpauseTime() {
-           // StaticLogger.LogInfo("Unpause Time");
-            if (firstDayBeforeJournal || inBetweenDays ) return;
+            // StaticLogger.LogInfo("Unpause Time");
+            if (firstDayBeforeJournal || inBetweenDays) return;
             var clockRoutineInfo = AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine");
             stopRoutines();
             customRoutine = realWorld.StartCoroutine(newRunClock(realWorld));
             clockRoutineInfo.SetValue(realWorld, customRoutine);
             paused = false;
-            
 
         }
-        
+
         // Restarts the time routine when the journal is closed
         // Runs a custom time routine just because its harder to get the original routine to run again
         public static bool closeSubMenuPatch(MenuButtonsTop __instance) {
@@ -363,32 +341,30 @@ namespace JournalPause {
             if (!NetworkMapSharer.share.nextDayIsReady) return true;
 
             // Makes sure the entire journal is being closed, not just a sub-submenu
-            if (MilestoneManager.manage.milestoneClaimWindowOpen || 
-                PediaManager.manage.entryFullScreenShown || 
-                (PhotoManager.manage.photoTabOpen && PhotoManager.manage.blownUpWindow.activeInHierarchy)) {
-                return true;
-            }
+            if (MilestoneManager.manage.milestoneClaimWindowOpen ||
+                PediaManager.manage.entryFullScreenShown ||
+                (PhotoManager.manage.photoTabOpen && PhotoManager.manage.blownUpWindow.activeInHierarchy)) { return true; }
 
             journalOpen = false;
 
             // Only unpause time if the pause hotkey isn't toggled on
             if (!pausedByHotkey) unpauseTime();
-            
+
             return true;
 
         }
 
         [HarmonyPostfix]
-        public static void confirmQuitButtonPrefix()
-        {
+        public static void confirmQuitButtonPrefix() {
             stopRoutines();
             paused = false;
             pausedByHotkey = false;
             journalOpen = false;
             timeSpeed = timeSpeedDefault;
+
             //StaticLogger.LogInfo("Inside ConfirmQuitButtonPostfix");
         }
-        
+
     }
 
 }
