@@ -24,6 +24,7 @@ namespace JournalPause {
         public const string pluginGuid = "tinyresort.dinkum.journalpause";
         public const string pluginName = "Time Management";
         public const string pluginVersion = "1.2.1";
+        public const string myModGameVersion = "v0.4.5";
         public static ManualLogSource StaticLogger;
         public static RealWorldTimeLight realWorld;
         public static ConfigEntry<KeyCode> pauseHotkey;
@@ -39,8 +40,7 @@ namespace JournalPause {
         public static float timeSpeedDefault;
         public static bool inBetweenDays;
         public static bool FullVersion = true;
-        public static string myModGameVersion;
-        public static bool firstWorkingPass = false;
+        public static bool isGameVersionChecked = false;
 
         private void Awake() {
 
@@ -99,24 +99,12 @@ namespace JournalPause {
 
         }
 
-        private void Update()
-        {
-            if (!firstWorkingPass) {
-                try {
-                    myModGameVersion = "v0.4.5";
-                    StaticLogger.LogInfo("Test");
-                    StaticLogger.LogInfo(
-                        TR.Tools.versionCheck.verifyGameVersions(myModGameVersion)
-                            ? "The game version match!"
-                            : "The game versions don't match!"
-                    );
-                    firstWorkingPass = !firstWorkingPass;
-                }
-                catch (MissingMethodException e) {
-                    StaticLogger.LogInfo(e);
-                }
-            }
+        private void Update() {
+
+            TR.Tools.versionCheck.verifyGameVersion(myModGameVersion);
+            StaticLogger.LogInfo(TR.Tools.versionCheck.gameVersionReturnString);
         }
+        
 
         // Gets a reference to the time manager class so that we can reference and set the clock routine easily
         private static bool updatePatch(RealWorldTimeLight __instance) {
