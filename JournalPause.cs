@@ -105,8 +105,6 @@ namespace JournalPause {
             if (check != null) { Dbgl(check); }
 
         }
-
-
         // Gets a reference to the time manager class so that we can reference and set the clock routine easily
         private static bool updatePatch(RealWorldTimeLight __instance) {
 
@@ -163,7 +161,6 @@ namespace JournalPause {
 
         // Same as normal time routine, but allows us to start and stop on demand
         public static IEnumerator newRunClock(RealWorldTimeLight __instance) {
-            //StaticLogger.LogInfo("New Run Clock");
             while (true) {
 
                 __instance.clockTick();
@@ -222,9 +219,7 @@ namespace JournalPause {
 
                         timeSpeed = (Mathf.Round(timeSpeed / increment) * increment) + increment;
                         text += "increased to " + timeSpeed + " min/sec";
-
                     }
-
                 }
 
                 // Increasing Speed
@@ -339,7 +334,5 @@ namespace JournalPause {
             journalOpen = false;
             timeSpeed = timeSpeedDefault;
         }
-
     }
-
 }
