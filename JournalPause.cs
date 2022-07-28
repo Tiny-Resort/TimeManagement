@@ -12,6 +12,7 @@ using UnityEngine;
 using HarmonyLib;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using BepInEx.Unity.Bootstrap;
 using UnityEngine.InputSystem;
 using TR;
 using TR.Tools;
@@ -31,6 +32,7 @@ namespace JournalPause {
         public static ConfigEntry<KeyCode> increaseTimeSpeedHotkey;
         public static ConfigEntry<KeyCode> decreaseTimeSpeedHotkey;
         public static ConfigEntry<bool> disableKeybinds;
+        public static ConfigEntry<int> nexusID;
         public static float timeSpeed = 0.5f;
         public static bool pausedByHotkey;
         public static bool paused;
@@ -41,13 +43,17 @@ namespace JournalPause {
         public static bool inBetweenDays;
         public static bool FullVersion = true;
         public static bool isGameVersionChecked = false;
+        public static bool isDebug = true;
 
+        public static void Dbgl(string str = "") {
+            if (isDebug) { StaticLogger.LogInfo(str); }
+        }
         private void Awake() {
 
             StaticLogger = Logger;
 
             #region Configuration
-
+            nexusID = Config.Bind<int>("General", "NexusID", 10, "Nexus mod ID for updates");
             if (FullVersion) {
                 pauseHotkey = Config.Bind<KeyCode>("Keybinds", "Pause", KeyCode.F9, "Unity KeyCode used for pausing the game.");
                 increaseTimeSpeedHotkey = Config.Bind<KeyCode>("Keybinds", "IncreaseTimeSpeed", KeyCode.KeypadPlus, "Unity KeyCode used for increasing the current time speed.");
@@ -81,7 +87,6 @@ namespace JournalPause {
             MethodInfo closeSubMenuPatch = AccessTools.Method(typeof(JournalPause), "closeSubMenuPatch");
             MethodInfo openSubMenu = AccessTools.Method(typeof(MenuButtonsTop), "openSubMenu");
             MethodInfo openSubMenuPatch = AccessTools.Method(typeof(JournalPause), "openSubMenuPatch");
-
             MethodInfo confirmQuitButton = AccessTools.Method(typeof(MenuButtonsTop), "ConfirmQuitButton");
             MethodInfo confirmQuitButtonPrefix = AccessTools.Method(typeof(JournalPause), "confirmQuitButtonPrefix");
 
@@ -97,14 +102,17 @@ namespace JournalPause {
 
             #endregion
 
+
+
         }
 
         private void Update() {
 
-            TR.Tools.versionCheck.verifyGameVersion(myModGameVersion);
-            StaticLogger.LogInfo(TR.Tools.versionCheck.gameVersionReturnString);
+            var check = TR.Tools.versionCheck.verifyGameVersion(myModGameVersion);
+            if (check != null) { StaticLogger.LogInfo(check); }
+
         }
-        
+
 
         // Gets a reference to the time manager class so that we can reference and set the clock routine easily
         private static bool updatePatch(RealWorldTimeLight __instance) {
