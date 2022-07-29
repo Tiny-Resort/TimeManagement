@@ -30,6 +30,9 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
+  <PropertyGroup>
+    <PostBuildEvent>C:\moveJournalPause.bat</PostBuildEvent>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="JournalPause.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -321,6 +324,9 @@
     <Reference Include="UnityEngine.XRModule">
       <HintPath>Libraries\UnityEngine.XRModule.dll</HintPath>
     </Reference>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Properties\TinyResortTools.dll" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

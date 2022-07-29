@@ -15,7 +15,6 @@ using System.Runtime.InteropServices;
 using BepInEx.Unity.Bootstrap;
 using UnityEngine.InputSystem;
 using TR;
-using TR.Tools;
 
 namespace JournalPause {
 
@@ -94,6 +93,8 @@ namespace JournalPause {
             harmony.Patch(closeSubMenu, new HarmonyMethod(closeSubMenuPatch));
             harmony.Patch(openSubMenu, new HarmonyMethod(openSubMenuPatch));
             harmony.Patch(confirmQuitButton, new HarmonyMethod(confirmQuitButtonPrefix));
+            
+            Tools.Initialize();
 
             #endregion
 
@@ -101,8 +102,8 @@ namespace JournalPause {
 
         private void Update() {
 
-            var check = TR.Tools.versionCheck.verifyGameVersion(myModGameVersion);
-            if (check != null) { Dbgl(check); }
+            //var check = Tools.verifyGameVersion(myModGameVersion);
+            //if (check != null) { Dbgl(check); }
 
         }
         // Gets a reference to the time manager class so that we can reference and set the clock routine easily
@@ -126,8 +127,7 @@ namespace JournalPause {
                 // If pausing by hotkey now, make sure the game is paused
                 if (pausedByHotkey) {
                     if (!paused) { pauseTime(); }
-                    TRPlugin.forceClearNotification = true;
-                    NotificationManager.manage.makeTopNotification("Time Management", "Now PAUSED");
+                    //Tools.topNotification("Time Management", "Now PAUSED");
                 }
 
                 // If unpausing by hotkey, unpause the game unless the journal is open
@@ -135,7 +135,7 @@ namespace JournalPause {
                     if (paused && !journalOpen) {
                         unpauseTime();
                     }
-                    TRPlugin.forceClearNotification = true;
+                   // Tools.forceClearNotification = true;
                     if (journalOpen) { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED (Still paused while in the journal)"); }
                     else { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED"); }
                 }
@@ -249,8 +249,7 @@ namespace JournalPause {
 
                 // Clamps time speed to keep it from going wild
                 timeSpeed = Mathf.Clamp(timeSpeed, 0.05f, 60f);
-                TRPlugin.forceClearNotification = true;
-                NotificationManager.manage.makeTopNotification("Time Management", text);
+                //Tools.topNotification("Time Management", text);
 
             }
 
