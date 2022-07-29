@@ -31,7 +31,10 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <PropertyGroup>
-    <PostBuildEvent>C:\moveJournalPause.bat</PostBuildEvent>
+    <PostBuildEvent>call $(MSBuildProjectDirectory)\PreAndPostBuildBats\moveJournalPause.bat</PostBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PreBuildEvent>call $(MSBuildProjectDirectory)\PreAndPostBuildBats\deleteOldJournalPause.bat</PreBuildEvent>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="JournalPause.cs" />

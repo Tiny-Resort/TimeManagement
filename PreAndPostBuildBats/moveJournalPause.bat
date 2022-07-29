@@ -1,0 +1,1 @@
+copy E:\DinkumMods\Journal-Pause\bin\Debug\JournalPause.dll E:\SteamLibrary\steamapps\common\Dinkum\BepInEx\plugins\JournalPause.dll
