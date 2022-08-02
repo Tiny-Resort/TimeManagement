@@ -38,9 +38,7 @@ namespace JournalPause {
         public static float timeSpeedDefault;
         public static bool inBetweenDays;
         public static bool runOnce = false;
-        public static bool runOnce2 = false;
         public static NPCManager manager;
-        public static List<ShopInfo> openingHours = new List<ShopInfo>();
         public static ConfigEntry<string> ignoreList;
         public static List<string> ignoreFullList;
         public static ConfigEntry<int> checkHoursBefore;
@@ -85,7 +83,7 @@ namespace JournalPause {
             MethodInfo updatePatch = AccessTools.Method(typeof(JournalPause), "updatePatch");
 
             MethodInfo clockTick = AccessTools.Method(typeof(RealWorldTimeLight), "clockTick");
-            MethodInfo clockTickPostfix = AccessTools.Method(typeof(JournalPause), "clockTickPostfix");
+            MethodInfo clockTickPostfix = AccessTools.Method(typeof(StoreHours), "clockTickPostfix");
 
             MethodInfo closeSubMenu = AccessTools.Method(typeof(MenuButtonsTop), "closeSubMenu");
             MethodInfo closeSubMenuPatch = AccessTools.Method(typeof(JournalPause), "closeSubMenuPatch");
@@ -97,10 +95,10 @@ namespace JournalPause {
             MethodInfo confirmQuitButtonPrefix = AccessTools.Method(typeof(JournalPause), "confirmQuitButtonPrefix");
 
             MethodInfo startNewDay = AccessTools.Method(typeof(RealWorldTimeLight), "startNewDay");
-            MethodInfo startNewDayPostfix = AccessTools.Method(typeof(JournalPause), "startNewDayPostfix");
+            MethodInfo startNewDayPostfix = AccessTools.Method(typeof(StoreHours), "startNewDayPostfix");
             
             MethodInfo Start = AccessTools.Method(typeof(RealWorldTimeLight), "Start");
-            MethodInfo startPrefix = AccessTools.Method(typeof(JournalPause), "startPrefix");
+            MethodInfo startPrefix = AccessTools.Method(typeof(StoreHours), "startPrefix");
 
             if (FullVersion) {
                 MethodInfo makeTopNotification = AccessTools.Method(typeof(NotificationManager), "makeTopNotification");
@@ -119,17 +117,9 @@ namespace JournalPause {
             #endregion
 
             ignoreFullList = ignoreList.Value.ToLower().Split(',').ToList();
-
         }
 
-        [HarmonyPrefix]
-        public static void startPrefix() {
-            for (int i = 0; i < openingHours.Count; i++) {
-                openingHours[i].checkedClosing = false;
-                openingHours[i].checkedOpening = false;
-                openingHours[i].checkedIfDayOff = false;
-            }
-        }
+  
         // Gets a reference to the time manager class so that we can reference and set the clock routine easily
         private static bool updatePatch(RealWorldTimeLight __instance) {
 
@@ -165,7 +155,6 @@ namespace JournalPause {
                     if (journalOpen) { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED (Still paused while in the journal)"); }
                     else { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED"); }
                 }
-
             }
 
             // Ensures time is stopped if it's supposed to be paused and started if its not
@@ -180,109 +169,16 @@ namespace JournalPause {
             // So, ensure our routine is the one that's playing
             if (!paused && customRoutine != clockRoutine && !firstDayBeforeJournal) {
                 //StaticLogger.LogInfo("Pause Time Checks 2");
-
                 pauseTime();
                 unpauseTime();
             }
 
             if (!runOnce) {
-                checkShopHours();
+                StoreHours.checkShopHours();
                 runOnce = true;
             }
-
             return true;
         }
-
-        public static void checkShopHours() {
-            for (var i = 0; i < NPCManager.manage.NPCDetails.Length; i++) {
-                string[] tmpString = NPCManager.manage.NPCDetails[i].mySchedual.getOpeningHours().Split(' ');
-                if (tmpString.Length >= 3) {
-                    int morningHours;
-                    int.TryParse(Regex.Match(tmpString[1], @"\d+").Value, out morningHours);
-                    int nightHours;
-                    int.TryParse(Regex.Match(tmpString[3], @"\d+").Value, out nightHours);
-                    ShopInfo tempInfo = new ShopInfo();
-                    tempInfo.owner = NPCManager.manage.NPCDetails[i].NPCName;
-                    tempInfo.morningHours = morningHours;
-                    tempInfo.closingHours = nightHours + 12;
-                    tempInfo.isVillager = NPCManager.manage.npcStatus[i].checkIfHasMovedIn();
-                    tempInfo.details = NPCManager.manage.NPCDetails[i];
-                    Debug.Log($"{tempInfo.owner} | {tempInfo.morningHours} | {tempInfo.closingHours} | {tempInfo.isVillager}");
-                    openingHours.Add(tempInfo);
-                }
-            }
-        }
-
-        [HarmonyPostfix]
-        public static void clockTickPostfix() { runCheckIfOpenOrCloseSoon(realWorld, openingHours); }
-
-        [HarmonyPostfix]
-        public static void startNewDayPostfix() {
-            for (int i = 0; i < openingHours.Count; i++) {
-                openingHours[i].checkedClosing = false;
-                openingHours[i].checkedOpening = false;
-                openingHours[i].checkedIfDayOff = false;
-            }
-        }
-
-        public static bool checkIfCurrentDayOff(ShopInfo details) {
-            if (details.details.mySchedual.dayOff[WorldManager.manageWorld.day - 1]) return true;
-            return false;
-        }
-
-        public static bool checkNextDayOff(ShopInfo details) {
-            if (WorldManager.manageWorld.day >= 7) {
-                if (details.details.mySchedual.dayOff[0]) return true;
-            }
-            else {
-                if (details.details.mySchedual.dayOff[WorldManager.manageWorld.day]) return true;
-            }
-            return false;
-        }
-
-        public static bool checkIfOpenInCurrentHour(ShopInfo details) {
-            if (RealWorldTimeLight.time.currentHour != 0
-             && RealWorldTimeLight.time.currentHour != 24
-             && !details.details.mySchedual.dayOff[WorldManager.manageWorld.day - 1]
-             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour] != NPCSchedual.Locations.Wonder
-             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour] != NPCSchedual.Locations.Exit) { return true; }
-            return false;
-        }
-
-        public static bool checkIfClosedInNextHour(ShopInfo details) {
-            if (RealWorldTimeLight.time.currentHour != 0
-             && RealWorldTimeLight.time.currentHour != 24
-             && !details.details.mySchedual.dayOff[WorldManager.manageWorld.day - 1]
-             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour + checkHoursBefore.Value] != NPCSchedual.Locations.Wonder
-             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour + checkHoursBefore.Value] != NPCSchedual.Locations.Exit) { return true; }
-            return false;
-        }
-
-        public static void runCheckIfOpenOrCloseSoon(RealWorldTimeLight time, List<ShopInfo> list) {
-            for (int i = 0; i < list.Count; i++) {
-                if (!ignoreFullList.Contains(list[i].details.NPCName.ToLower())) {
-                    if (checkIfOpenInCurrentHour(list[i]) && time.currentMinute > 00 && list[i].isVillager && !list[i].checkedOpening && time.currentHour == 7) { list[i].checkedOpening = true; }
-                    if (checkIfOpenInCurrentHour(list[i]) && time.currentMinute == 00 && list[i].isVillager && !list[i].checkedOpening && time.currentHour >= 8 && time.currentHour < 13) {
-                        NotificationManager.manage.createChatNotification($"{list[i].owner}'s store just opened (at {list[i].morningHours}AM).");
-                        list[i].checkedOpening = true;
-                    }
-                    if (time.currentHour < 23) {
-                        if (!checkIfCurrentDayOff(list[i]) && !checkIfClosedInNextHour(list[i]) && time.currentHour > 12 && time.currentMinute == 0 && list[i].isVillager && !list[i].checkedClosing) {
-                            if (checkNextDayOff(list[i])) { NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in {checkHoursBefore.Value} hour(s) (at {list[i].closingHours - 12}PM) and will be closed tomorrow."); }
-                            else
-                                NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in an hour(at {list[i].closingHours - 12}PM).");
-                            list[i].checkedClosing = true;
-                        }
-                    }
-                    if (checkIfCurrentDayOff(list[i]) && !list[i].checkedIfDayOff && list[i].isVillager && time.currentHour >= 8) {
-                        NotificationManager.manage.createChatNotification($"{list[i].owner} is off today!");
-                        list[i].checkedIfDayOff = true;
-                    }
-
-                }
-            }
-        }
-
         // Same as normal time routine, but allows us to start and stop on demand
         public static IEnumerator newRunClock(RealWorldTimeLight __instance) {
             //StaticLogger.LogInfo("New Run Clock");
@@ -307,9 +203,7 @@ namespace JournalPause {
 
                 // Run any necessary tasks
                 if (__instance.currentMinute == 0 || __instance.currentMinute == 15 || __instance.currentMinute == 30 || __instance.currentMinute == 45) { __instance.taskChecker.Invoke(); }
-
             }
-
         }
 
         // Increasing or decreasing the speed of time with hotkeys
@@ -512,15 +406,5 @@ namespace JournalPause {
 
     }
 
-    public class ShopInfo {
-        public NPCDetails details;
-        public string owner;
-        public int morningHours;
-        public int closingHours;
-        public bool isVillager;
-        public bool checkedOpening = false;
-        public bool checkedClosing = false;
-        public bool checkedIfDayOff = false;
-    }
 
 }
