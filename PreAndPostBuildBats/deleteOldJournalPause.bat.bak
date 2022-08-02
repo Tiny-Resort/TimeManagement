@@ -1,0 +1,1 @@
+del E:\DinkumMods\Journal-Pause\bin\Debug\JournalPause.dll

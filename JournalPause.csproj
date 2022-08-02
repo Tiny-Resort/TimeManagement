@@ -30,6 +30,12 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
+  <PropertyGroup>
+    <PreBuildEvent>call C:\PreAndPostBuildBats\JournalMod\deleteJP.bat</PreBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PostBuildEvent>call C:\PreAndPostBuildBats\JournalMod\moveJP.bat</PostBuildEvent>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="JournalPause.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
