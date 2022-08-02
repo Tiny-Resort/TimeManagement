@@ -60,7 +60,7 @@ namespace JournalPause {
                 timeSpeed = Config.Bind<float>("Speed", "TimeSpeed", 0.5f, "How many minutes of in-game time should pass per second. This default is the game's default. Higher values will result is faster, shorter days. Lower values will result in longer, slower days. A value of 1 will be twice as fast as the default game speed. A value of 0.25 will be half as fast as the default game speed.").Value;
                 disableKeybinds = Config.Bind<bool>("Speed", "DisableKeybinds", false, "Disables the use of the keybinds for increasing and decreasing time.");
                 ignoreList = Config.Bind<string>("Shop Control", "IgnoreNPCShopNotification", " ", $"Add NPC names that you would like to ignore and separate it by comma (no space).\nHere is a list: John, Clover, Rayne, Irwin, Theodore, Melvin, Franklyn, Fletch, Milburn");
-                checkHoursBefore = Config.Bind<int>("Shop Control", "X-HoursBefore", 1 , "Set the desired number of hours before closing you'd like to be warned.");
+                checkHoursBefore = Config.Bind<int>("Shop Control", "X-HoursBefore", 1, "Set the desired number of hours before closing you'd like to be warned.");
             }
             timeSpeedDefault = timeSpeed;
 
@@ -98,6 +98,9 @@ namespace JournalPause {
 
             MethodInfo startNewDay = AccessTools.Method(typeof(RealWorldTimeLight), "startNewDay");
             MethodInfo startNewDayPostfix = AccessTools.Method(typeof(JournalPause), "startNewDayPostfix");
+            
+            MethodInfo Start = AccessTools.Method(typeof(RealWorldTimeLight), "Start");
+            MethodInfo startPrefix = AccessTools.Method(typeof(JournalPause), "startPrefix");
 
             if (FullVersion) {
                 MethodInfo makeTopNotification = AccessTools.Method(typeof(NotificationManager), "makeTopNotification");
@@ -111,6 +114,7 @@ namespace JournalPause {
             harmony.Patch(confirmQuitButton, new HarmonyMethod(confirmQuitButtonPrefix));
             harmony.Patch(clockTick, new HarmonyMethod(clockTickPostfix));
             harmony.Patch(startNewDay, new HarmonyMethod(startNewDayPostfix));
+            harmony.Patch(Start, new HarmonyMethod(startPrefix));
 
             #endregion
 
@@ -118,6 +122,14 @@ namespace JournalPause {
 
         }
 
+        [HarmonyPrefix]
+        public static void startPrefix() {
+            for (int i = 0; i < openingHours.Count; i++) {
+                openingHours[i].checkedClosing = false;
+                openingHours[i].checkedOpening = false;
+                openingHours[i].checkedIfDayOff = false;
+            }
+        }
         // Gets a reference to the time manager class so that we can reference and set the clock routine easily
         private static bool updatePatch(RealWorldTimeLight __instance) {
 
@@ -209,6 +221,7 @@ namespace JournalPause {
             for (int i = 0; i < openingHours.Count; i++) {
                 openingHours[i].checkedClosing = false;
                 openingHours[i].checkedOpening = false;
+                openingHours[i].checkedIfDayOff = false;
             }
         }
 
@@ -223,9 +236,7 @@ namespace JournalPause {
             }
             else {
                 if (details.details.mySchedual.dayOff[WorldManager.manageWorld.day]) return true;
-
             }
-
             return false;
         }
 
@@ -250,8 +261,8 @@ namespace JournalPause {
         public static void runCheckIfOpenOrCloseSoon(RealWorldTimeLight time, List<ShopInfo> list) {
             for (int i = 0; i < list.Count; i++) {
                 if (!ignoreFullList.Contains(list[i].details.NPCName.ToLower())) {
-                    if (checkIfOpenInCurrentHour(list[i]) && time.currentMinute == 10 && list[i].isVillager && !list[i].checkedOpening && time.currentHour == 7) { list[i].checkedOpening = true; }
-                    if (checkIfOpenInCurrentHour(list[i]) && time.currentMinute == 00 && list[i].isVillager && !list[i].checkedOpening) {
+                    if (checkIfOpenInCurrentHour(list[i]) && time.currentMinute > 00 && list[i].isVillager && !list[i].checkedOpening && time.currentHour == 7) { list[i].checkedOpening = true; }
+                    if (checkIfOpenInCurrentHour(list[i]) && time.currentMinute == 00 && list[i].isVillager && !list[i].checkedOpening && time.currentHour >= 8 && time.currentHour < 13) {
                         NotificationManager.manage.createChatNotification($"{list[i].owner}'s store just opened (at {list[i].morningHours}AM).");
                         list[i].checkedOpening = true;
                     }
@@ -263,6 +274,11 @@ namespace JournalPause {
                             list[i].checkedClosing = true;
                         }
                     }
+                    if (checkIfCurrentDayOff(list[i]) && !list[i].checkedIfDayOff && list[i].isVillager && time.currentHour >= 8) {
+                        NotificationManager.manage.createChatNotification($"{list[i].owner} is off today!");
+                        list[i].checkedIfDayOff = true;
+                    }
+
                 }
             }
         }
@@ -504,6 +520,7 @@ namespace JournalPause {
         public bool isVillager;
         public bool checkedOpening = false;
         public bool checkedClosing = false;
+        public bool checkedIfDayOff = false;
     }
 
 }
