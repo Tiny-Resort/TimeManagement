@@ -43,6 +43,7 @@ namespace JournalPause {
         public static List<ShopInfo> openingHours = new List<ShopInfo>();
         public static ConfigEntry<string> ignoreList;
         public static List<string> ignoreFullList;
+        public static ConfigEntry<int> checkHoursBefore;
 
         public static bool FullVersion = true;
 
@@ -59,6 +60,7 @@ namespace JournalPause {
                 timeSpeed = Config.Bind<float>("Speed", "TimeSpeed", 0.5f, "How many minutes of in-game time should pass per second. This default is the game's default. Higher values will result is faster, shorter days. Lower values will result in longer, slower days. A value of 1 will be twice as fast as the default game speed. A value of 0.25 will be half as fast as the default game speed.").Value;
                 disableKeybinds = Config.Bind<bool>("Speed", "DisableKeybinds", false, "Disables the use of the keybinds for increasing and decreasing time.");
                 ignoreList = Config.Bind<string>("Shop Control", "IgnoreNPCShopNotification", " ", $"Add NPC names that you would like to ignore and separate it by comma (no space).\nHere is a list: John, Clover, Rayne, Irwin, Theodore, Melvin, Franklyn, Fletch, Milburn");
+                checkHoursBefore = Config.Bind<int>("Shop Control", "X-HoursBefore", 1 , "Set the desired number of hours before closing you'd like to be warned.");
             }
             timeSpeedDefault = timeSpeed;
 
@@ -94,6 +96,9 @@ namespace JournalPause {
             MethodInfo confirmQuitButton = AccessTools.Method(typeof(MenuButtonsTop), "ConfirmQuitButton");
             MethodInfo confirmQuitButtonPrefix = AccessTools.Method(typeof(JournalPause), "confirmQuitButtonPrefix");
 
+            MethodInfo startNewDay = AccessTools.Method(typeof(RealWorldTimeLight), "startNewDay");
+            MethodInfo startNewDayPostfix = AccessTools.Method(typeof(JournalPause), "startNewDayPostfix");
+
             if (FullVersion) {
                 MethodInfo makeTopNotification = AccessTools.Method(typeof(NotificationManager), "makeTopNotification");
                 MethodInfo makeTopNotificationPrefix = AccessTools.Method(typeof(JournalPause), "makeTopNotificationPrefix");
@@ -105,6 +110,7 @@ namespace JournalPause {
             harmony.Patch(openSubMenu, new HarmonyMethod(openSubMenuPatch));
             harmony.Patch(confirmQuitButton, new HarmonyMethod(confirmQuitButtonPrefix));
             harmony.Patch(clockTick, new HarmonyMethod(clockTickPostfix));
+            harmony.Patch(startNewDay, new HarmonyMethod(startNewDayPostfix));
 
             #endregion
 
@@ -236,8 +242,8 @@ namespace JournalPause {
             if (RealWorldTimeLight.time.currentHour != 0
              && RealWorldTimeLight.time.currentHour != 24
              && !details.details.mySchedual.dayOff[WorldManager.manageWorld.day - 1]
-             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour + 1] != NPCSchedual.Locations.Wonder
-             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour + 1] != NPCSchedual.Locations.Exit) { return true; }
+             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour + checkHoursBefore.Value] != NPCSchedual.Locations.Wonder
+             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour + checkHoursBefore.Value] != NPCSchedual.Locations.Exit) { return true; }
             return false;
         }
 
@@ -251,7 +257,7 @@ namespace JournalPause {
                     }
                     if (time.currentHour < 23) {
                         if (!checkIfCurrentDayOff(list[i]) && !checkIfClosedInNextHour(list[i]) && time.currentHour > 12 && time.currentMinute == 0 && list[i].isVillager && !list[i].checkedClosing) {
-                            if (checkNextDayOff(list[i])) { NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in an hour(at {list[i].closingHours - 12}PM) and will be closed tomorrow."); }
+                            if (checkNextDayOff(list[i])) { NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in {checkHoursBefore.Value} hour(s) (at {list[i].closingHours - 12}PM) and will be closed tomorrow."); }
                             else
                                 NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in an hour(at {list[i].closingHours - 12}PM).");
                             list[i].checkedClosing = true;
