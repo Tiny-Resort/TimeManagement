@@ -12,7 +12,9 @@ using UnityEngine;
 using HarmonyLib;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Windows.Forms;
 using UnityEngine.InputSystem;
+using TR;
 
 namespace JournalPause {
 
@@ -57,9 +59,9 @@ namespace JournalPause {
                 decreaseTimeSpeedHotkey = Config.Bind<KeyCode>("Keybinds", "DecreaseTimeSpeed", KeyCode.KeypadMinus, "Unity KeyCode used for decreasing the current time speed.");
                 timeSpeed = Config.Bind<float>("Speed", "TimeSpeed", 0.5f, "How many minutes of in-game time should pass per second. This default is the game's default. Higher values will result is faster, shorter days. Lower values will result in longer, slower days. A value of 1 will be twice as fast as the default game speed. A value of 0.25 will be half as fast as the default game speed.").Value;
                 disableKeybinds = Config.Bind<bool>("Speed", "DisableKeybinds", false, "Disables the use of the keybinds for increasing and decreasing time.");
-                ignoreList = Config.Bind<string>("Shop Control", "IgnoreNPCShopNotification", " ", $"Add NPC names that you would like to ignore and separate it by comma (no space).\nHere is a list: John, Clover, Rayne, Irwin, Theodore, Melvin, Franklyn, Fletch, Milburn");
-                checkHoursBefore = Config.Bind<int>("Shop Control", "X-HoursBefore", 1, "Set the desired number of hours before closing you'd like to be warned.");
             }
+            ignoreList = Config.Bind<string>("Shop Control", "IgnoreNPCShopNotification", " ", $"Add NPC names that you would like to ignore and separate it by comma (no space).\nHere is a list: John, Clover, Rayne, Irwin, Theodore, Melvin, Franklyn, Fletch, Milburn");
+            checkHoursBefore = Config.Bind<int>("Shop Control", "X-HoursBefore", 1, "Set the desired number of hours before closing you'd like to be warned.");
             timeSpeedDefault = timeSpeed;
 
             #endregion
@@ -100,12 +102,6 @@ namespace JournalPause {
             MethodInfo Start = AccessTools.Method(typeof(RealWorldTimeLight), "Start");
             MethodInfo startPrefix = AccessTools.Method(typeof(StoreHours), "startPrefix");
 
-            if (FullVersion) {
-                MethodInfo makeTopNotification = AccessTools.Method(typeof(NotificationManager), "makeTopNotification");
-                MethodInfo makeTopNotificationPrefix = AccessTools.Method(typeof(JournalPause), "makeTopNotificationPrefix");
-                harmony.Patch(makeTopNotification, new HarmonyMethod(makeTopNotificationPrefix));
-            }
-
             harmony.Patch(update, new HarmonyMethod(updatePatch));
             harmony.Patch(closeSubMenu, new HarmonyMethod(closeSubMenuPatch));
             harmony.Patch(openSubMenu, new HarmonyMethod(openSubMenuPatch));
@@ -114,6 +110,7 @@ namespace JournalPause {
             harmony.Patch(startNewDay, new HarmonyMethod(startNewDayPostfix));
             harmony.Patch(Start, new HarmonyMethod(startPrefix));
 
+            Tools.Initialize(harmony);
             #endregion
 
             ignoreFullList = ignoreList.Value.ToLower().Split(',').ToList();
@@ -142,7 +139,7 @@ namespace JournalPause {
                 if (pausedByHotkey) {
                     if (!paused) { pauseTime(); }
                     forceClearNotification = true;
-                    NotificationManager.manage.makeTopNotification("Time Management", "Now PAUSED");
+                    Tools.Notify("Time Management", "Now PAUSED");
                 }
 
                 // If unpausing by hotkey, unpause the game unless the journal is open
@@ -152,8 +149,8 @@ namespace JournalPause {
                         unpauseTime();
                     }
                     forceClearNotification = true;
-                    if (journalOpen) { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED (Still paused while in the journal)"); }
-                    else { NotificationManager.manage.makeTopNotification("Time Management", "Now UNPAUSED"); }
+                    if (journalOpen) { Tools.Notify("Time Management", "Now UNPAUSED (Still paused while in the journal)"); }
+                    else { Tools.Notify("Time Management", "Now UNPAUSED"); }
                 }
             }
 
@@ -272,50 +269,10 @@ namespace JournalPause {
                 // Clamps time speed to keep it from going wild
                 timeSpeed = Mathf.Clamp(timeSpeed, 0.05f, 60f);
                 forceClearNotification = true;
-                NotificationManager.manage.makeTopNotification("Time Management", text);
+                Tools.Notify("Time Management", text);
 
             }
 
-        }
-
-        // Forcibly clears the top notification so that it can be replaced immediately
-        [HarmonyPrefix]
-        public static bool makeTopNotificationPrefix(NotificationManager __instance) {
-
-            if (forceClearNotification) {
-                forceClearNotification = false;
-
-                var toNotify = (List<string>)AccessTools.Field(typeof(NotificationManager), "toNotify").GetValue(__instance);
-                var subTextNot = (List<string>)AccessTools.Field(typeof(NotificationManager), "subTextNot").GetValue(__instance);
-                var soundToPlay = (List<ASound>)AccessTools.Field(typeof(NotificationManager), "soundToPlay").GetValue(__instance);
-                var topNotificationRunning = AccessTools.Field(typeof(NotificationManager), "topNotificationRunning");
-                var topNotificationRunningRoutine = topNotificationRunning.GetValue(__instance);
-
-                // Clears existing notifications in the queue
-                toNotify.Clear();
-                subTextNot.Clear();
-                soundToPlay.Clear();
-
-                // Stops the current coroutine from continuing
-                if (topNotificationRunningRoutine != null) {
-                    __instance.StopCoroutine((Coroutine)topNotificationRunningRoutine);
-                    topNotificationRunning.SetValue(__instance, null);
-                }
-
-                // Resets all animations related to the notificatin bubble appearing/disappearing
-                __instance.StopCoroutine("closeWithMask");
-                __instance.topNotification.StopAllCoroutines();
-                var Anim = __instance.topNotification.GetComponent<WindowAnimator>();
-                Anim.StopAllCoroutines();
-                Anim.maskChild.enabled = false;
-                Anim.contents.gameObject.SetActive(false);
-                Anim.gameObject.SetActive(false);
-
-                return true;
-
-            }
-            else
-                return true;
         }
 
         // Stops the time routine from running when the journal is opened
