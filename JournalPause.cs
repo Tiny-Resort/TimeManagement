@@ -17,7 +17,7 @@ namespace JournalPause {
 
         public const string pluginGuid = "tinyresort.dinkum.journalpause";
         public const string pluginName = "Time Management";
-        public const string pluginVersion = "1.2.1";
+        public const string pluginVersion = "1.3.0";
         public static ManualLogSource StaticLogger;
         public static RealWorldTimeLight realWorld;
         public static ConfigEntry<KeyCode> pauseHotkey;
@@ -271,7 +271,6 @@ namespace JournalPause {
 
         // Stops the time routine from running when the journal is opened
         public static bool openSubMenuPatch() {
-            //StaticLogger.LogInfo("Open Sub Menu Patch");
             // Keeps it from running on clients in a multiplayer world due to clockRoutine not running
             // on clients and preventing the player from opening their milestone manager (ESC key)
             if (!realWorld.isServer) return true;
@@ -284,7 +283,6 @@ namespace JournalPause {
 
         // Stops the flow of time
         public static void pauseTime() {
-            //StaticLogger.LogInfo("Inside Pause Time");
             if (firstDayBeforeJournal || inBetweenDays) return;
             stopRoutines();
             paused = true;
@@ -310,7 +308,6 @@ namespace JournalPause {
 
         // Restarts time (Failsafe: Makes sure its not already restarted somehow)
         public static void unpauseTime() {
-            // StaticLogger.LogInfo("Unpause Time");
             if (firstDayBeforeJournal || inBetweenDays) return;
             var clockRoutineInfo = AccessTools.Field(typeof(RealWorldTimeLight), "clockRoutine");
             stopRoutines();
@@ -322,7 +319,6 @@ namespace JournalPause {
         // Restarts the time routine when the journal is closed
         // Runs a custom time routine just because its harder to get the original routine to run again
         public static bool closeSubMenuPatch(MenuButtonsTop __instance) {
-            //StaticLogger.LogInfo("closeSubMenuPatch");
             // Keeps it from running on clients in a multiplayer world due to clockRoutine not running
             // on clients and preventing the player from opening their milestone manager (ESC key)
             if (!realWorld.isServer) return true;
