@@ -1,20 +1,14 @@
-﻿using System;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
-using System.DirectoryServices.ActiveDirectory;
 using System.Linq;
+using System.Reflection;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Core.Logging.Interpolation;
 using BepInEx.Logging;
-using Mirror;
-using UnityEngine;
 using HarmonyLib;
-using System.Reflection;
-using System.Text.RegularExpressions;
-using System.Windows.Forms;
-using UnityEngine.InputSystem;
 using TR;
+using UnityEngine;
 
 namespace JournalPause {
 

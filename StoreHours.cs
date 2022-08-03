@@ -1,18 +1,6 @@
-using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.DirectoryServices.ActiveDirectory;
-using System.Linq;
-using BepInEx;
-using BepInEx.Configuration;
-using BepInEx.Core.Logging.Interpolation;
-using BepInEx.Logging;
-using Mirror;
-using UnityEngine;
-using HarmonyLib;
-using System.Reflection;
 using System.Text.RegularExpressions;
-using UnityEngine.InputSystem;
+using HarmonyLib;
 
 namespace JournalPause {
 
@@ -22,13 +10,16 @@ namespace JournalPause {
         public int morningHours;
         public int closingHours;
         public bool isVillager;
-        public bool checkedOpening = false;
-        public bool checkedClosing = false;
-        public bool checkedIfDayOff = false;
+        public bool checkedOpening;
+        public bool checkedClosing;
+        public bool checkedIfDayOff;
     }
+
     public class StoreHours {
-        
+
         public static List<ShopInfo> openingHours = new List<ShopInfo>();
+
+        #region Refresh Variables
 
         [HarmonyPrefix]
         public static void startPrefix() {
@@ -39,8 +30,6 @@ namespace JournalPause {
                 JournalPause.runOnce = false;
             }
         }
-        [HarmonyPostfix]
-        public static void clockTickPostfix() { runCheckIfOpenOrCloseSoon(JournalPause.realWorld, openingHours); }
 
         [HarmonyPostfix]
         public static void startNewDayPostfix() {
@@ -51,18 +40,26 @@ namespace JournalPause {
             }
         }
 
-        public static bool checkIfCurrentDayOff(ShopInfo details) {
-            if (details.details.mySchedual.dayOff[WorldManager.manageWorld.day - 1]) return true;
-            return false;
-        }
+        #endregion
 
-        public static bool checkNextDayOff(ShopInfo details) {
-            if (WorldManager.manageWorld.day >= 7) {
-                if (details.details.mySchedual.dayOff[0]) return true;
+        #region Run Every Clock Tick
+
+        [HarmonyPostfix]
+        public static void clockTickPostfix() { runCheckIfOpenOrCloseSoon(JournalPause.realWorld, openingHours); }
+
+        #endregion
+
+        #region Check Store Hours and Days Off
+
+        public static bool checkDaysOff(ShopInfo details, bool checkTomorrow) {
+
+            int currentDay = checkTomorrow == false ? WorldManager.manageWorld.day - 1 : WorldManager.manageWorld.day;
+            int nextDay = currentDay >= 7 ? 0 : currentDay;
+
+            if (checkTomorrow) {
+                if (details.details.mySchedual.dayOff[nextDay]) { return true; }
             }
-            else {
-                if (details.details.mySchedual.dayOff[WorldManager.manageWorld.day]) return true;
-            }
+            if (details.details.mySchedual.dayOff[currentDay]) { return true; }
             return false;
         }
 
@@ -85,46 +82,46 @@ namespace JournalPause {
             }
         }
 
-        public static bool checkIfOpenInCurrentHour(ShopInfo details) {
-            if (RealWorldTimeLight.time.currentHour != 0
-             && RealWorldTimeLight.time.currentHour != 24
-             && !details.details.mySchedual.dayOff[WorldManager.manageWorld.day - 1]
-             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour] != NPCSchedual.Locations.Wonder
-             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour] != NPCSchedual.Locations.Exit) { return true; }
+        public static bool checkStoreHours(ShopInfo details, bool checkClosing) {
+
+            int currentHour = checkClosing == false ? RealWorldTimeLight.time.currentHour : RealWorldTimeLight.time.currentHour + JournalPause.checkHoursBefore.Value;
+            bool isDayOff = details.details.mySchedual.dayOff[WorldManager.manageWorld.day - 1];
+            bool isNotWonder = details.details.mySchedual.dailySchedual[currentHour] != NPCSchedual.Locations.Wonder;
+            bool isNotExit = details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour] != NPCSchedual.Locations.Exit;
+            if (currentHour != 0 && currentHour != 24 && !isDayOff && isNotWonder && isNotExit) { return true; }
             return false;
         }
 
-        public static bool checkIfClosedInNextHour(ShopInfo details) {
-            if (RealWorldTimeLight.time.currentHour != 0
-             && RealWorldTimeLight.time.currentHour != 24
-             && !details.details.mySchedual.dayOff[WorldManager.manageWorld.day - 1]
-             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour + JournalPause.checkHoursBefore.Value] != NPCSchedual.Locations.Wonder
-             && details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour + JournalPause.checkHoursBefore.Value] != NPCSchedual.Locations.Exit) { return true; }
-            return false;
-        }
+        #endregion
+
+        #region Run Check and Send Notification
 
         public static void runCheckIfOpenOrCloseSoon(RealWorldTimeLight time, List<ShopInfo> list) {
             for (int i = 0; i < list.Count; i++) {
                 if (!JournalPause.ignoreFullList.Contains(list[i].details.NPCName.ToLower())) {
-                    if (checkIfOpenInCurrentHour(list[i]) && time.currentMinute > 00 && list[i].isVillager && !list[i].checkedOpening && time.currentHour == 7) { list[i].checkedOpening = true; }
-                    if (checkIfOpenInCurrentHour(list[i]) && time.currentMinute == 00 && list[i].isVillager && !list[i].checkedOpening && time.currentHour >= 8 && time.currentHour < 13) {
+                    if (checkStoreHours(list[i], false) && time.currentMinute > 00 && list[i].isVillager && !list[i].checkedOpening && time.currentHour == 7) { list[i].checkedOpening = true; }
+                    if (checkStoreHours(list[i], false) && time.currentMinute == 00 && list[i].isVillager && !list[i].checkedOpening && time.currentHour >= 8 && time.currentHour < 13) {
                         NotificationManager.manage.createChatNotification($"{list[i].owner}'s store just opened (at {list[i].morningHours}AM).");
                         list[i].checkedOpening = true;
                     }
                     if (time.currentHour < 23) {
-                        if (!checkIfCurrentDayOff(list[i]) && !checkIfClosedInNextHour(list[i]) && time.currentHour > 12 && time.currentMinute == 0 && list[i].isVillager && !list[i].checkedClosing) {
-                            if (checkNextDayOff(list[i])) { NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in {JournalPause.checkHoursBefore.Value} hour(s) (at {list[i].closingHours - 12}PM) and will be closed tomorrow."); }
+                        if (!checkDaysOff(list[i], false) && !checkStoreHours(list[i], true) && time.currentHour > 12 && time.currentMinute == 0 && list[i].isVillager && !list[i].checkedClosing) {
+                            if (checkDaysOff(list[i], true)) { NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in {JournalPause.checkHoursBefore.Value} hour(s) (at {list[i].closingHours - 12}PM) and will be closed tomorrow."); }
                             else
                                 NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in an hour(at {list[i].closingHours - 12}PM).");
                             list[i].checkedClosing = true;
                         }
                     }
-                    if (checkIfCurrentDayOff(list[i]) && !list[i].checkedIfDayOff && list[i].isVillager && time.currentHour >= 8) {
+                    if (checkDaysOff(list[i], false) && !list[i].checkedIfDayOff && list[i].isVillager && time.currentHour >= 8) {
                         NotificationManager.manage.createChatNotification($"{list[i].owner} is off today!");
                         list[i].checkedIfDayOff = true;
                     }
                 }
             }
         }
+
+        #endregion
+
     }
+
 }
