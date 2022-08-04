@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using HarmonyLib;
+using UnityEngine;
 
 namespace JournalPause {
 
@@ -59,12 +60,16 @@ namespace JournalPause {
         public static bool checkDaysOff(ShopInfo details, bool checkTomorrow) {
 
             int currentDay = checkTomorrow == false ? WorldManager.manageWorld.day - 1 : WorldManager.manageWorld.day;
+            Debug.Log($"Current Day: {currentDay}");
             int nextDay = currentDay >= 7 ? 0 : currentDay;
+            Debug.Log($"Next Day: {nextDay}");
 
             if (checkTomorrow) {
                 if (details.details.mySchedual.dayOff[nextDay]) { return true; }
             }
-            if (details.details.mySchedual.dayOff[currentDay]) { return true; }
+            else {
+                if (details.details.mySchedual.dayOff[currentDay]) { return true; }
+            }
             return false;
         }
 
@@ -84,6 +89,7 @@ namespace JournalPause {
                     tempInfo.closingHours = nightHours + 12;
                     tempInfo.isVillager = NPCManager.manage.npcStatus[i].checkIfHasMovedIn();
                     tempInfo.details = NPCManager.manage.NPCDetails[i];
+                    Debug.Log($"{tempInfo.owner} | {tempInfo.closingHours}");
                     openingHours.Add(tempInfo);
                 }
             }
@@ -91,12 +97,13 @@ namespace JournalPause {
 
         // Checks the stores hours compared to the NPCs schedules
         public static bool checkStoreHours(ShopInfo details, bool checkClosing) {
-
             int currentHour = checkClosing == false ? RealWorldTimeLight.time.currentHour : RealWorldTimeLight.time.currentHour + JournalPause.checkHoursBefore.Value;
+            if (checkClosing && currentHour > details.details.mySchedual.dailySchedual.Length - 1) { return false; }
             bool isDayOff = details.details.mySchedual.dayOff[WorldManager.manageWorld.day - 1];
             bool isNotWonder = details.details.mySchedual.dailySchedual[currentHour] != NPCSchedual.Locations.Wonder;
             bool isNotExit = details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour] != NPCSchedual.Locations.Exit;
             if (currentHour != 0 && currentHour != 24 && !isDayOff && isNotWonder && isNotExit) { return true; }
+
             return false;
         }
 

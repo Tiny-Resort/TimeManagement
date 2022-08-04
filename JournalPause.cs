@@ -55,9 +55,10 @@ namespace JournalPause {
                 disableKeybinds = Config.Bind<bool>("Speed", "DisableKeybinds", false, "Disables the use of the keybinds for increasing and decreasing time.");
             }
             ignoreList = Config.Bind<string>("Shop Control", "IgnoreNPCShopNotification", " ", $"Add NPC names that you would like to ignore and separate it by comma (no space).\nHere is a list: John, Clover, Rayne, Irwin, Theodore, Melvin, Franklyn, Fletch, Milburn");
-            checkHoursBefore = Config.Bind<int>("Shop Control", "X-HoursBefore", 1, "Set the desired number of hours before closing you'd like to be warned.");
+            checkHoursBefore = Config.Bind<int>("Shop Control", "X-HoursBefore", 1, "Set a value of 1 or 2 for how many hours before closing you'd like to notified.");
             timeSpeedDefault = timeSpeed;
 
+            if (checkHoursBefore.Value > 2) checkHoursBefore.Value = 2;
             #endregion
 
             #region Logging
