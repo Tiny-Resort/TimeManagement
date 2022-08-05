@@ -59,6 +59,7 @@ namespace JournalPause {
             timeSpeedDefault = timeSpeed;
 
             if (checkHoursBefore.Value > 2) checkHoursBefore.Value = 2;
+            Debug.Log("CHECK HORUS BEFORE: " + checkHoursBefore.Value);
             #endregion
 
             #region Logging
@@ -208,7 +209,6 @@ namespace JournalPause {
 
             // Increasing the speed of time, keeping it below 20 minutes per second
             if (increaseSpeed || decreaseSpeed) {
-                StaticLogger.LogInfo("Test if I got in here");
                 var text = "Time speed ";
 
                 // Decreasing Speed

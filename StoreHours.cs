@@ -60,9 +60,7 @@ namespace JournalPause {
         public static bool checkDaysOff(ShopInfo details, bool checkTomorrow) {
 
             int currentDay = checkTomorrow == false ? WorldManager.manageWorld.day - 1 : WorldManager.manageWorld.day;
-            Debug.Log($"Current Day: {currentDay}");
             int nextDay = currentDay >= 7 ? 0 : currentDay;
-            Debug.Log($"Next Day: {nextDay}");
 
             if (checkTomorrow) {
                 if (details.details.mySchedual.dayOff[nextDay]) { return true; }
@@ -89,7 +87,6 @@ namespace JournalPause {
                     tempInfo.closingHours = nightHours + 12;
                     tempInfo.isVillager = NPCManager.manage.npcStatus[i].checkIfHasMovedIn();
                     tempInfo.details = NPCManager.manage.NPCDetails[i];
-                    Debug.Log($"{tempInfo.owner} | {tempInfo.closingHours}");
                     openingHours.Add(tempInfo);
                 }
             }
@@ -97,13 +94,13 @@ namespace JournalPause {
 
         // Checks the stores hours compared to the NPCs schedules
         public static bool checkStoreHours(ShopInfo details, bool checkClosing) {
-            int currentHour = checkClosing == false ? RealWorldTimeLight.time.currentHour : RealWorldTimeLight.time.currentHour + JournalPause.checkHoursBefore.Value;
+            int currentHour = !checkClosing ? RealWorldTimeLight.time.currentHour : RealWorldTimeLight.time.currentHour + JournalPause.checkHoursBefore.Value;
+            Debug.Log("Current Hour For Closing: " + currentHour);
             if (checkClosing && currentHour > details.details.mySchedual.dailySchedual.Length - 1) { return false; }
             bool isDayOff = details.details.mySchedual.dayOff[WorldManager.manageWorld.day - 1];
             bool isNotWonder = details.details.mySchedual.dailySchedual[currentHour] != NPCSchedual.Locations.Wonder;
-            bool isNotExit = details.details.mySchedual.dailySchedual[RealWorldTimeLight.time.currentHour] != NPCSchedual.Locations.Exit;
+            bool isNotExit = details.details.mySchedual.dailySchedual[currentHour] != NPCSchedual.Locations.Exit;
             if (currentHour != 0 && currentHour != 24 && !isDayOff && isNotWonder && isNotExit) { return true; }
-
             return false;
         }
 
@@ -115,26 +112,31 @@ namespace JournalPause {
         public static void runCheckIfOpenOrCloseSoon(RealWorldTimeLight time, List<ShopInfo> list) {
             for (int i = 0; i < list.Count; i++) {
                 // Set to ignore a list of NPCs as requested in the Config file
-                if (!JournalPause.ignoreFullList.Contains(list[i].details.NPCName.ToLower())) {
-                    // If the store is open before 8AM, ignore the notification since they wil always be open on day start
-                    if (checkStoreHours(list[i], false) && time.currentMinute > 00 && list[i].isVillager && !list[i].checkedOpening && time.currentHour == 7) { list[i].checkedOpening = true; }
-                    // Check the opening store hours for the remaining NPCs
-                    if (checkStoreHours(list[i], false) && time.currentMinute == 00 && list[i].isVillager && !list[i].checkedOpening && time.currentHour >= 8 && time.currentHour < 13) {
-                        NotificationManager.manage.createChatNotification($"{list[i].owner}'s store just opened (at {list[i].morningHours}AM).");
-                        list[i].checkedOpening = true;
+                if (!JournalPause.ignoreFullList.Contains(list[i].details.NPCName.ToLower()) && list[i].isVillager && time.currentMinute == 00) {
+                    
+                    if (!list[i].checkedOpening) {
+                        // If the store is open before 8AM, ignore the notification since they wil always be open on day start
+                        if (checkStoreHours(list[i], false) && time.currentHour == 7) {
+                            list[i].checkedOpening = true;
+                        }
+                        // Check the opening store hours for the remaining NPCs
+                        if (checkStoreHours(list[i], false) && time.currentHour >= 8 && time.currentHour < 13) {
+                            NotificationManager.manage.createChatNotification($"{list[i].owner}'s store just opened (at {list[i].morningHours}AM).");
+                            list[i].checkedOpening = true;
+                        }
                     }
+
                     // Check the closing stores hours; Takes in a config option for how many hours prior you want to see the notification appear.
                     // It will also give you a heads up if they are going to be closed the following day. 
                     if (time.currentHour < 23) {
-                        if (!checkDaysOff(list[i], false) && !checkStoreHours(list[i], true) && time.currentHour > 12 && time.currentMinute == 0 && list[i].isVillager && !list[i].checkedClosing) {
+                        if (time.currentHour > 12 && !list[i].checkedClosing && !checkDaysOff(list[i], false) && !checkStoreHours(list[i], true)) {
                             if (checkDaysOff(list[i], true)) { NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in {JournalPause.checkHoursBefore.Value} hour(s) (at {list[i].closingHours - 12}PM) and will be closed tomorrow."); }
-                            else
-                                NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in an hour(at {list[i].closingHours - 12}PM).");
+                            else { NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in {JournalPause.checkHoursBefore.Value} hour(s) (at {list[i].closingHours - 12}PM)."); }
                             list[i].checkedClosing = true;
                         }
                     }
                     // Checks if the NPC has the day off and gives you a notification (as a hint to hang out with them)
-                    if (checkDaysOff(list[i], false) && !list[i].checkedIfDayOff && list[i].isVillager && time.currentHour >= 8) {
+                    if (!list[i].checkedIfDayOff && time.currentHour >= 8 && checkDaysOff(list[i], false)) {
                         NotificationManager.manage.createChatNotification($"{list[i].owner} is off today!");
                         list[i].checkedIfDayOff = true;
                     }
