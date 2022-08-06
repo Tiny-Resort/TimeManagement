@@ -3,7 +3,7 @@ using System.Text.RegularExpressions;
 using HarmonyLib;
 using UnityEngine;
 
-namespace JournalPause {
+namespace TinyResort {
 
     public class ShopInfo {
         public NPCDetails details;

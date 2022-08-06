@@ -7,43 +7,45 @@ using BepInEx.Configuration;
 using BepInEx.Core.Logging.Interpolation;
 using BepInEx.Logging;
 using HarmonyLib;
-using TR;
 using UnityEngine;
 
-namespace JournalPause {
+namespace TinyResort {
 
     [BepInPlugin(pluginGuid, pluginName, pluginVersion)]
     public class JournalPause : BaseUnityPlugin {
 
+        public static TRPlugin Plugin;
         public const string pluginGuid = "tinyresort.dinkum.journalpause";
         public const string pluginName = "Time Management";
         public const string pluginVersion = "1.3.0";
-        public static ManualLogSource StaticLogger;
+        
         public static RealWorldTimeLight realWorld;
-        public static ConfigEntry<KeyCode> pauseHotkey;
-        public static ConfigEntry<KeyCode> increaseTimeSpeedHotkey;
-        public static ConfigEntry<KeyCode> decreaseTimeSpeedHotkey;
-        public static ConfigEntry<bool> disableKeybinds;
+        public static NPCManager manager;
+        
         public static float timeSpeed = 0.5f;
         public static bool pausedByHotkey;
         public static bool paused;
         public static Coroutine customRoutine;
         public static bool journalOpen;
-        public static bool forceClearNotification;
+        
         public static bool firstDayBeforeJournal;
         public static float timeSpeedDefault;
         public static bool inBetweenDays;
-        public static bool runOnce = false;
-        public static NPCManager manager;
+        public static bool runOnce;
+        
+        public static ConfigEntry<KeyCode> pauseHotkey;
+        public static ConfigEntry<KeyCode> increaseTimeSpeedHotkey;
+        public static ConfigEntry<KeyCode> decreaseTimeSpeedHotkey;
+        public static ConfigEntry<bool> disableKeybinds;
         public static ConfigEntry<string> ignoreList;
-        public static List<string> ignoreFullList;
         public static ConfigEntry<int> checkHoursBefore;
-
+        
+        public static List<string> ignoreFullList;
         public static bool FullVersion = true;
 
         private void Awake() {
 
-            StaticLogger = Logger;
+            Plugin = TRTools.Initialize(this, Logger, 10, pluginGuid, pluginName, pluginVersion);
 
             #region Configuration
 
@@ -59,54 +61,17 @@ namespace JournalPause {
             timeSpeedDefault = timeSpeed;
 
             if (checkHoursBefore.Value > 2) checkHoursBefore.Value = 2;
-            Debug.Log("CHECK HORUS BEFORE: " + checkHoursBefore.Value);
-            #endregion
-
-            #region Logging
-
-            ManualLogSource logger = Logger;
-
-            bool flag;
-            BepInExInfoLogInterpolatedStringHandler handler = new BepInExInfoLogInterpolatedStringHandler(18, 1, out flag);
-            if (flag) { handler.AppendLiteral("Plugin " + pluginGuid + " (v" + pluginVersion + ") loaded!"); }
-            logger.LogInfo(handler);
-
+            Debug.Log("CHECK HOURS BEFORE: " + checkHoursBefore.Value);
             #endregion
 
             #region Patching
-
-            Harmony harmony = new Harmony(pluginGuid);
-
-            MethodInfo update = AccessTools.Method(typeof(RealWorldTimeLight), "Update");
-            MethodInfo updatePatch = AccessTools.Method(typeof(JournalPause), "updatePatch");
-
-            MethodInfo clockTick = AccessTools.Method(typeof(RealWorldTimeLight), "clockTick");
-            MethodInfo clockTickPostfix = AccessTools.Method(typeof(StoreHours), "clockTickPostfix");
-
-            MethodInfo closeSubMenu = AccessTools.Method(typeof(MenuButtonsTop), "closeSubMenu");
-            MethodInfo closeSubMenuPatch = AccessTools.Method(typeof(JournalPause), "closeSubMenuPatch");
-
-            MethodInfo openSubMenu = AccessTools.Method(typeof(MenuButtonsTop), "openSubMenu");
-            MethodInfo openSubMenuPatch = AccessTools.Method(typeof(JournalPause), "openSubMenuPatch");
-
-            MethodInfo confirmQuitButton = AccessTools.Method(typeof(MenuButtonsTop), "ConfirmQuitButton");
-            MethodInfo confirmQuitButtonPrefix = AccessTools.Method(typeof(JournalPause), "confirmQuitButtonPrefix");
-
-            MethodInfo startNewDay = AccessTools.Method(typeof(RealWorldTimeLight), "startNewDay");
-            MethodInfo startNewDayPostfix = AccessTools.Method(typeof(StoreHours), "startNewDayPostfix");
-            
-            MethodInfo Start = AccessTools.Method(typeof(RealWorldTimeLight), "Start");
-            MethodInfo startPrefix = AccessTools.Method(typeof(StoreHours), "startPrefix");
-
-            harmony.Patch(update, new HarmonyMethod(updatePatch));
-            harmony.Patch(closeSubMenu, new HarmonyMethod(closeSubMenuPatch));
-            harmony.Patch(openSubMenu, new HarmonyMethod(openSubMenuPatch));
-            harmony.Patch(confirmQuitButton, new HarmonyMethod(confirmQuitButtonPrefix));
-            harmony.Patch(clockTick, new HarmonyMethod(clockTickPostfix));
-            harmony.Patch(startNewDay, new HarmonyMethod(startNewDayPostfix));
-            harmony.Patch(Start, new HarmonyMethod(startPrefix));
-
-            Tools.Initialize(harmony);
+            Plugin.QuickPatch(typeof(RealWorldTimeLight), "Update", typeof(JournalPause), "updatePatch");
+            Plugin.QuickPatch(typeof(RealWorldTimeLight), "clockTick", typeof(StoreHours), "clockTickPostfix");
+            Plugin.QuickPatch(typeof(MenuButtonsTop), "closeSubMenu", typeof(JournalPause), "closeSubMenuPatch");
+            Plugin.QuickPatch(typeof(MenuButtonsTop), "openSubMenu", typeof(JournalPause), "openSubMenuPatch");
+            Plugin.QuickPatch(typeof(MenuButtonsTop), "ConfirmQuitButton", typeof(JournalPause), "confirmQuitButtonPrefix");
+            Plugin.QuickPatch(typeof(RealWorldTimeLight), "startNewDay", typeof(StoreHours), "startNewDayPostfix");
+            Plugin.QuickPatch(typeof(RealWorldTimeLight), "Start", typeof(StoreHours), "startPrefix");
             #endregion
 
             ignoreFullList = ignoreList.Value.ToLower().Split(',').ToList();
@@ -134,8 +99,7 @@ namespace JournalPause {
                 // If pausing by hotkey now, make sure the game is paused
                 if (pausedByHotkey) {
                     if (!paused) { pauseTime(); }
-                    forceClearNotification = true;
-                    Tools.Notify("Time Management", "Now PAUSED");
+                    TRTools.TopNotification("Time Management", "Now PAUSED");
                 }
 
                 // If unpausing by hotkey, unpause the game unless the journal is open
@@ -144,9 +108,8 @@ namespace JournalPause {
                         //StaticLogger.LogInfo("unpauseTime() --- Paused and !JournalOpen");
                         unpauseTime();
                     }
-                    forceClearNotification = true;
-                    if (journalOpen) { Tools.Notify("Time Management", "Now UNPAUSED (Still paused while in the journal)"); }
-                    else { Tools.Notify("Time Management", "Now UNPAUSED"); }
+                    if (journalOpen) { TRTools.TopNotification("Time Management", "Now UNPAUSED (Still paused while in the journal)"); }
+                    else { TRTools.TopNotification("Time Management", "Now UNPAUSED"); }
                 }
             }
 
@@ -263,8 +226,7 @@ namespace JournalPause {
 
                 // Clamps time speed to keep it from going wild
                 timeSpeed = Mathf.Clamp(timeSpeed, 0.05f, 60f);
-                forceClearNotification = true;
-                Tools.Notify("Time Management", text);
+                TRTools.TopNotification("Time Management", text);
 
             }
 
