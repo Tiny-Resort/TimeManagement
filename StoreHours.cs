@@ -50,10 +50,12 @@ namespace TinyResort {
 
         // Run the function on every tick of the clock
         [HarmonyPostfix]
-        public static void clockTickPostfix() { runCheckIfOpenOrCloseSoon(JournalPause.realWorld, openingHours); }
+        public static void clockTickPostfix() {
+            if (RealWorldTimeLight.time.currentMinute == 00 || RealWorldTimeLight.time.currentMinute == 30) { runCheckIfOpenOrCloseSoon(JournalPause.realWorld, openingHours); }
+        }
 
-        #endregion
-
+        #endregion 
+ 
         #region Check Store Hours and Days Off
         
         // Check which days the NPC has off
