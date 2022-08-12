@@ -19,7 +19,7 @@ namespace TinyResort {
     public class StoreHours {
 
         public static List<ShopInfo> openingHours = new List<ShopInfo>();
-
+        public static bool TriggerShopCheck = true;
         #region Refresh Variables
 
         // Updates the variables on Start of RealWorldTimeLight
@@ -30,6 +30,7 @@ namespace TinyResort {
                 openingHours[i].checkedClosing = false;
                 openingHours[i].checkedOpening = false;
                 openingHours[i].checkedIfDayOff = false;
+                TriggerShopCheck = true;
                 JournalPause.runOnce = false;
             }
         }
@@ -41,6 +42,7 @@ namespace TinyResort {
                 openingHours[i].checkedClosing = false;
                 openingHours[i].checkedOpening = false;
                 openingHours[i].checkedIfDayOff = false;
+                TriggerShopCheck = true;
             }
         }
 
@@ -51,7 +53,11 @@ namespace TinyResort {
         // Run the function on every tick of the clock
         [HarmonyPostfix]
         public static void clockTickPostfix() {
-            if (RealWorldTimeLight.time.currentMinute == 00 || RealWorldTimeLight.time.currentMinute == 30) { runCheckIfOpenOrCloseSoon(JournalPause.realWorld, openingHours); }
+            if (TriggerShopCheck && (RealWorldTimeLight.time.currentMinute == 00 || RealWorldTimeLight.time.currentMinute == 30)) {
+                if (RealWorldTimeLight.time.currentHour > 7 && RealWorldTimeLight.time.currentHour == 00) TriggerShopCheck = false;
+                runCheckIfOpenOrCloseSoon(JournalPause.realWorld, openingHours);
+            }
+            if (RealWorldTimeLight.time.currentMinute == 05) { TriggerShopCheck = true; }
         }
 
         #endregion 
