@@ -128,10 +128,18 @@ namespace TinyResort {
                 pauseTime();
                 unpauseTime();
             }
-
-            if (!runOnce) {
-                StoreHours.checkShopHours();
-                runOnce = true;
+            
+            if (Input.GetKeyDown(KeyCode.F11)) {
+                //StoreHours.InitializeListData();
+                for (int i = 0; i < StoreHours.ShopInfo.Count; i++) {
+                    JournalPause.Plugin.LogToConsole($"Intialization Data\n-----------------------------------");
+                    JournalPause.Plugin.LogToConsole($"Shop: {StoreHours.ShopInfo[i].ShopName} | Owner: {StoreHours.ShopInfo[i].NPCName} | Hours: {StoreHours.ShopInfo[i].morningHours}-{StoreHours.ShopInfo[i].closingHours} | Villager: {StoreHours.ShopInfo[i].isVillager} | Sent: {StoreHours.ShopInfo[i].sentOpening}, {StoreHours.ShopInfo[i].sentClosing}, {StoreHours.ShopInfo[i].sentDayOff}");
+                    JournalPause.Plugin.LogToConsole($"End of  Data\n-----------------------------------");
+                }
+            }
+            
+            if (!StoreHours.dataInitialized) {
+                StoreHours.InitializeListData();
             }
             return true;
         }

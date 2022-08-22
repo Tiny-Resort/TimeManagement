@@ -1,159 +1,266 @@
 using System.Collections.Generic;
+using System.Diagnostics.Eventing.Reader;
 using System.Text.RegularExpressions;
+using BepInEx;
 using HarmonyLib;
 using UnityEngine;
 
 namespace TinyResort {
-
-    public class ShopInfo {
+    
+    public class NotificationDetails {
         public NPCDetails details;
-        public string owner;
+
+        public string NPCName;
+        public string ShopName;
+        
         public int morningHours;
         public int closingHours;
+        public int dayOff;
+        
+        public bool tomorrowOff;
         public bool isVillager;
-        public bool checkedOpening;
-        public bool checkedClosing;
-        public bool checkedIfDayOff;
+        public bool sentOpening;
+        public bool sentClosing;
+        public bool sentDayOff;
+        public StoreHours.Status status = StoreHours.Status.None;
     }
 
     public class StoreHours {
 
-        public static List<ShopInfo> openingHours = new List<ShopInfo>();
-        public static bool TriggerShopCheck = true;
+        public static List<NotificationDetails> ShopInfo = new List<NotificationDetails>();
+        public static List<NotificationDetails> toNotify = new List<NotificationDetails>();
+        public static bool checkIfStoreOpenRunning;
+        public static bool dataInitialized;
+
+        public static int countOpening;
+        public static int countClosing;
+        public static int countDaysOff;
+        
+        // Checks the stores hours compared to the NPCs schedules
+        public static int getOpeningHours(NPCDetails currentNPC) {
+            for (int i = 7; i < 24; i++) {
+                bool isNotWonder = currentNPC.mySchedual.dailySchedual[i] != NPCSchedual.Locations.Wonder;
+                bool isNotExit = currentNPC.mySchedual.dailySchedual[i] != NPCSchedual.Locations.Exit;
+                // Return the first time this is true, which will be the opening hour for the NPC. 
+                if (i != 0 && i != 24 && (isNotWonder && isNotExit)) { return i; }
+            } return 0;
+        }
+
+        public static int getClosingHours(NPCDetails currentNPC) {
+            for (int i = 12; i < 24; i++) {
+                if (currentNPC.mySchedual.dailySchedual[i] == NPCSchedual.Locations.Exit && currentNPC.mySchedual.dailySchedual[i] != NPCSchedual.Locations.Wonder) {
+                    return i;
+                }
+            } return 0;
+        }
+
+        public static bool checkIfOffTomorrow(NPCDetails details) {
+            int currentDay =  WorldManager.manageWorld.day;
+            int nextDay = currentDay >= 7 ? 0 : currentDay;
+            if (details.mySchedual.dayOff[nextDay]) { return true; }
+            return false;
+        }
+        
+        public static void InitializeListData() {
+            dataInitialized = true;
+            ShopInfo.Clear();
+            
+            for (var i = 0; i < NPCManager.manage.NPCDetails.Length; i++) {
+                // Initialize Unique Info
+                NotificationDetails tempInfo = new NotificationDetails();
+                tempInfo.NPCName = NPCManager.manage.NPCDetails[i].NPCName;
+                tempInfo.ShopName = getShopName(tempInfo.NPCName);
+                tempInfo.morningHours = getOpeningHours(NPCManager.manage.NPCDetails[i]);
+                tempInfo.closingHours = getClosingHours(NPCManager.manage.NPCDetails[i]);
+                tempInfo.tomorrowOff = checkIfOffTomorrow(NPCManager.manage.NPCDetails[i]);
+                tempInfo.isVillager = NPCManager.manage.npcStatus[i].checkIfHasMovedIn();
+                tempInfo.details = NPCManager.manage.NPCDetails[i];
+                for (int j = 0; j < NPCManager.manage.NPCDetails[i].mySchedual.dayOff.Length; j++) {
+                    var tmpDayOff = NPCManager.manage.NPCDetails[i].mySchedual.dayOff[j];
+                    if (tmpDayOff) tempInfo.dayOff = j + 1; // +1 because the array starts at 0, but the day list starts at 1.
+                }
+                // Initialize Default Info
+                tempInfo.sentOpening = false;
+                tempInfo.sentClosing = false;
+                tempInfo.sentDayOff = false;
+                
+                ShopInfo.Add(tempInfo);
+            }
+        }
+        
+        public static string getShopName(string owner) {
+            switch (owner.ToLower()) {
+                case "john":
+                    return "John's Goods";
+                case "franklyn":
+                    return "Franklyn's Lab";
+                case "rayne":
+                    return "Rayne's Greenhouse";
+                case "clover":
+                    return "Threadspace";
+                case "melvin":
+                    return "Melvin Furniture";
+                case "irwin":
+                    return "Irwin's Barn";
+            }
+            return "Default";
+        }
+
+        public static void checkStoreStatus(RealWorldTimeLight time, List<NotificationDetails> NPC) {
+            countOpening = 0;
+            countClosing = 0;
+            countDaysOff = 0;
+            
+            checkIfStoreOpenRunning = true;
+            toNotify.Clear();
+            var tmpCurrentDay = WorldManager.manageWorld.day;
+            
+            for (int i = 0; i < NPC.Count; i++) {
+
+                // Check if on ignore list and villager
+                if (!JournalPause.ignoreFullList.Contains(NPC[i].details.NPCName.ToLower()) && NPC[i].isVillager && NPC[i].ShopName != "Default") {
+                    // check if day off
+                    if (!NPC[i].sentDayOff && NPC[i].details.mySchedual.dayOff[tmpCurrentDay - 1]) {
+                        JournalPause.Plugin.LogToConsole($"Day Off: {NPC[i].NPCName}");
+                        NPC[i].sentDayOff = true;
+                        NPC[i].status = Status.DayOff;
+                        countDaysOff += 1;
+                        toNotify.Add(NPC[i]);
+                    }
+                    // Check opening hours
+                    if (!NPC[i].sentOpening && NPC[i].morningHours >= 8 && NPC[i].morningHours == time.currentHour) {
+                        JournalPause.Plugin.LogToConsole($"Opening: {NPC[i].NPCName}");
+                        NPC[i].sentOpening = true;
+                        NPC[i].status = Status.Opening;
+                        countOpening += 1;
+                        toNotify.Add(NPC[i]);
+                    }
+                    // check closing hours
+                    if (!NPC[i].sentClosing && NPC[i].closingHours == time.currentHour + JournalPause.checkHoursBefore.Value) {
+                        JournalPause.Plugin.LogToConsole($"Closing: {NPC[i].NPCName}");
+                        NPC[i].sentClosing = true;
+                        NPC[i].status = Status.Closing;
+                        countClosing += 1;
+                        toNotify.Add(NPC[i]);
+                    }
+                }
+            }
+            SendNotification();
+        }
+
+        public static void SendNotification() {
+            string dayOff = "";
+            string opening = "";
+            string closing = "";
+            string offTomorrow = "";
+            int countOffTomorrow = 0;
+
+            int tmpOpening = 0;
+            int tmpClosing = 0;
+            int tmpDayOff = 0;
+            int tmpOffTomorrow = 0;
+
+            foreach (NotificationDetails shop in toNotify) {
+                if (shop.tomorrowOff && shop.status == Status.Closing) {
+                    countOffTomorrow += 1;
+                    countClosing -= 1;
+                }
+            }
+            
+            if (toNotify.Count > 0) {
+                for (int i = 0; i < toNotify.Count; i++) {
+                    switch (toNotify[i].status) {
+                        case Status.Opening:
+                            tmpOpening += 1;
+                            if (countOpening == 1) opening = $"{toNotify[i].ShopName}";
+                            if (countOpening == 2 && tmpOpening == 1) opening = $"{toNotify[i].ShopName} and ";
+                            if (countOpening == 2 && tmpOpening == 2) opening += $"{toNotify[i].ShopName}";
+                            if (countOpening > 3 && countOpening != tmpOpening) opening += $"{toNotify[i].ShopName}, ";
+                            if (countOpening > 3 && countOpening == tmpOpening) opening += $" and {toNotify[i].ShopName}";
+                            break;
+                        case Status.Closing:
+                            if (toNotify[i].tomorrowOff) {
+                                tmpOffTomorrow += 1;
+                                if (countOffTomorrow == 1) offTomorrow = $"{toNotify[i].NPCName}";
+                                if (countOffTomorrow == 2 && tmpOffTomorrow == 1) offTomorrow = $"{toNotify[i].NPCName} and ";
+                                if (countOffTomorrow == 2 && tmpOffTomorrow == 2) offTomorrow += $"{toNotify[i].NPCName}";
+                                if (countOffTomorrow > 3 && countOffTomorrow != tmpOffTomorrow) offTomorrow += $"{toNotify[i].NPCName}, ";
+                                if (countOffTomorrow > 3 && countOffTomorrow == tmpOffTomorrow) offTomorrow += $" and {toNotify[i].NPCName}";
+                            }
+                            else {
+                                tmpClosing += 1;
+                                if (countClosing == 1) closing = $"{toNotify[i].ShopName}";
+                                if (countClosing == 2 && tmpClosing == 1) closing = $"{toNotify[i].ShopName} and ";
+                                if (countClosing == 2 && tmpClosing == 2) closing += $"{toNotify[i].ShopName}";
+                                if (countClosing > 3 && countClosing != tmpClosing) closing += $"{toNotify[i].ShopName}, ";
+                                if (countClosing > 3 && countClosing == tmpClosing) closing += $" and {toNotify[i].ShopName}";
+                            }
+                            break;
+                        case Status.DayOff:
+                            tmpDayOff += 1;
+                            if (countDaysOff == 1) dayOff = $"{toNotify[i].NPCName}";
+                            if (countDaysOff == 2 && tmpDayOff == 1) dayOff = $"{toNotify[i].NPCName} and ";
+                            if (countDaysOff == 2 && tmpDayOff == 2) dayOff += $"{toNotify[i].NPCName}";
+                            if (countDaysOff > 3 && countDaysOff != tmpDayOff) dayOff += $"{toNotify[i].NPCName}, ";
+                            if (countDaysOff > 3 && countDaysOff == tmpDayOff) dayOff += $" and {toNotify[i].NPCName}";
+                            break;
+                    }
+                    
+                }
+                string openingNotification = countOpening > 1 ? $"{opening} are open now!" : $"{opening} is open now!";
+                string closingNotification = countClosing > 1 ? $"{closing} are closing {JournalPause.checkHoursBefore.Value} hours." : $"{closing} is closing in {JournalPause.checkHoursBefore.Value} hours.";
+                string offTomorrowNotification = countOffTomorrow > 1 ? $"{offTomorrow} are closing in {JournalPause.checkHoursBefore.Value} hours and will be closed tomorrow!" : $"{offTomorrow} is closing in {JournalPause.checkHoursBefore.Value} and will be closed tomorrow!";
+                string dayOffNotification = countDaysOff > 1 ? $"{dayOff} are having the day off!" : $"{dayOff} has the day off!";
+
+                if (countOpening > 0) NotificationManager.manage.createChatNotification(openingNotification);
+                if (countClosing > 0) NotificationManager.manage.createChatNotification(closingNotification);
+                if (countOffTomorrow > 0) NotificationManager.manage.createChatNotification(offTomorrowNotification);
+                if (countDaysOff > 0) NotificationManager.manage.createChatNotification(dayOffNotification);
+                
+                toNotify.Clear();
+            }
+            checkIfStoreOpenRunning = false;
+        }
+
+        public static string commaOrAnd(int count) {
+            switch (count) {
+                case 0:
+                    return "";
+                case 1: return "";
+                case 2: return " and ";
+            }
+            return ", ";
+        }
+        
         #region Refresh Variables
 
         // Updates the variables on Start of RealWorldTimeLight
         // This fixes issues when exiting to main menu and re-entering games)
         [HarmonyPrefix]
         public static void startPrefix() {
-            for (int i = 0; i < openingHours.Count; i++) {
-                openingHours[i].checkedClosing = false;
-                openingHours[i].checkedOpening = false;
-                openingHours[i].checkedIfDayOff = false;
-                TriggerShopCheck = true;
-                JournalPause.runOnce = false;
-            }
+            InitializeListData();
+            JournalPause.runOnce = false;
         }
 
         // Updates the variables on start of new day
         [HarmonyPostfix]
         public static void startNewDayPostfix() {
-            for (int i = 0; i < openingHours.Count; i++) {
-                openingHours[i].checkedClosing = false;
-                openingHours[i].checkedOpening = false;
-                openingHours[i].checkedIfDayOff = false;
-                TriggerShopCheck = true;
-            }
+            InitializeListData();
         }
 
         #endregion
-
-        #region Run Every Clock Tick
 
         // Run the function on every tick of the clock
         [HarmonyPostfix]
         public static void clockTickPostfix() {
-            if (TriggerShopCheck && (RealWorldTimeLight.time.currentMinute == 00 || RealWorldTimeLight.time.currentMinute == 30)) {
-                if (RealWorldTimeLight.time.currentHour > 7 && RealWorldTimeLight.time.currentHour == 00) TriggerShopCheck = false;
-                runCheckIfOpenOrCloseSoon(JournalPause.realWorld, openingHours);
-            }
-            if (RealWorldTimeLight.time.currentMinute == 05) { TriggerShopCheck = true; }
-        }
-
-        #endregion 
- 
-        #region Check Store Hours and Days Off
-        
-        // Check which days the NPC has off
-        public static bool checkDaysOff(ShopInfo details, bool checkTomorrow) {
-
-            int currentDay = checkTomorrow == false ? WorldManager.manageWorld.day - 1 : WorldManager.manageWorld.day;
-            int nextDay = currentDay >= 7 ? 0 : currentDay;
-
-            if (checkTomorrow) {
-                if (details.details.mySchedual.dayOff[nextDay]) { return true; }
-            }
-            else {
-                if (details.details.mySchedual.dayOff[currentDay]) { return true; }
-            }
-            return false;
-        }
-
-        // Collects the Shop's hours in string format (8AM - 6PM) and parses it for just the two digits. 
-        // Also stores the owner's name, if they are currently a villager, and the NPC Details. 
-        public static void checkShopHours() {
-            for (var i = 0; i < NPCManager.manage.NPCDetails.Length; i++) {
-                string[] tmpString = NPCManager.manage.NPCDetails[i].mySchedual.getOpeningHours().Split(' ');
-                if (tmpString.Length >= 3) {
-                    int morningHours;
-                    int.TryParse(Regex.Match(tmpString[1], @"\d+").Value, out morningHours);
-                    int nightHours;
-                    int.TryParse(Regex.Match(tmpString[3], @"\d+").Value, out nightHours);
-                    ShopInfo tempInfo = new ShopInfo();
-                    tempInfo.owner = NPCManager.manage.NPCDetails[i].NPCName;
-                    tempInfo.morningHours = morningHours;
-                    tempInfo.closingHours = nightHours + 12;
-                    tempInfo.isVillager = NPCManager.manage.npcStatus[i].checkIfHasMovedIn();
-                    tempInfo.details = NPCManager.manage.NPCDetails[i];
-                    openingHours.Add(tempInfo);
-                }
+            if (RealWorldTimeLight.time.currentMinute == 00 && RealWorldTimeLight.time.currentHour > 7 && !checkIfStoreOpenRunning) {
+                checkStoreStatus(JournalPause.realWorld, ShopInfo);
             }
         }
 
-        // Checks the stores hours compared to the NPCs schedules
-        public static bool checkStoreHours(ShopInfo details, bool checkClosing) {
-            int currentHour = !checkClosing ? RealWorldTimeLight.time.currentHour : RealWorldTimeLight.time.currentHour + JournalPause.checkHoursBefore.Value;
-            Debug.Log("Current Hour For Closing: " + currentHour);
-            if (checkClosing && currentHour > details.details.mySchedual.dailySchedual.Length - 1) { return false; }
-            bool isDayOff = details.details.mySchedual.dayOff[WorldManager.manageWorld.day - 1];
-            bool isNotWonder = details.details.mySchedual.dailySchedual[currentHour] != NPCSchedual.Locations.Wonder;
-            bool isNotExit = details.details.mySchedual.dailySchedual[currentHour] != NPCSchedual.Locations.Exit;
-            if (currentHour != 0 && currentHour != 24 && !isDayOff && isNotWonder && isNotExit) { return true; }
-            return false;
+        public enum Status {
+            Opening, Closing, DayOff, OffTomorrow, None
         }
-
-        #endregion
-
-        #region Run Check and Send Notification
-
-        // Runs the functions and prints out the notification message
-        public static void runCheckIfOpenOrCloseSoon(RealWorldTimeLight time, List<ShopInfo> list) {
-            for (int i = 0; i < list.Count; i++) {
-                // Set to ignore a list of NPCs as requested in the Config file
-                if (!JournalPause.ignoreFullList.Contains(list[i].details.NPCName.ToLower()) && list[i].isVillager && time.currentMinute == 00) {
-                    
-                    if (!list[i].checkedOpening) {
-                        // If the store is open before 8AM, ignore the notification since they wil always be open on day start
-                        if (checkStoreHours(list[i], false) && time.currentHour == 7) {
-                            list[i].checkedOpening = true;
-                        }
-                        // Check the opening store hours for the remaining NPCs
-                        if (checkStoreHours(list[i], false) && time.currentHour >= 8 && time.currentHour < 13) {
-                            NotificationManager.manage.createChatNotification($"{list[i].owner}'s store just opened (at {list[i].morningHours}AM).");
-                            list[i].checkedOpening = true;
-                        }
-                    }
-
-                    // Check the closing stores hours; Takes in a config option for how many hours prior you want to see the notification appear.
-                    // It will also give you a heads up if they are going to be closed the following day. 
-                    if (time.currentHour < 23) {
-                        if (time.currentHour > 12 && !list[i].checkedClosing && !checkDaysOff(list[i], false) && !checkStoreHours(list[i], true)) {
-                            if (checkDaysOff(list[i], true)) { NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in {JournalPause.checkHoursBefore.Value} hour(s) (at {list[i].closingHours - 12}PM) and will be closed tomorrow."); }
-                            else { NotificationManager.manage.createChatNotification($"{list[i].owner}'s store will close in {JournalPause.checkHoursBefore.Value} hour(s) (at {list[i].closingHours - 12}PM)."); }
-                            list[i].checkedClosing = true;
-                        }
-                    }
-                    // Checks if the NPC has the day off and gives you a notification (as a hint to hang out with them)
-                    if (!list[i].checkedIfDayOff && time.currentHour >= 8 && checkDaysOff(list[i], false)) {
-                        NotificationManager.manage.createChatNotification($"{list[i].owner} is off today!");
-                        list[i].checkedIfDayOff = true;
-                    }
-                }
-            }
-        }
-
-        #endregion
-
     }
 
 }
