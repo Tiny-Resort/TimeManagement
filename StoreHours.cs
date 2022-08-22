@@ -47,6 +47,7 @@ namespace TinyResort {
         }
 
         public static int getClosingHours(NPCDetails currentNPC) {
+            // If 12pm or later and the current schedule is exit and the previous isn't wonder it should be closing time
             for (int i = 12; i < 24; i++) {
                 if (currentNPC.mySchedual.dailySchedual[i] == NPCSchedual.Locations.Exit && currentNPC.mySchedual.dailySchedual[i] != NPCSchedual.Locations.Wonder) {
                     return i;
@@ -111,6 +112,7 @@ namespace TinyResort {
             countClosing = 0;
             countDaysOff = 0;
             
+            // Don't let it start a new one until the current notifications are posted (this could be an issue if time was going too fast, but won't account for that)
             checkIfStoreOpenRunning = true;
             toNotify.Clear();
             var tmpCurrentDay = WorldManager.manageWorld.day;
@@ -160,13 +162,17 @@ namespace TinyResort {
             int tmpDayOff = 0;
             int tmpOffTomorrow = 0;
 
+            // Looks to see if any of the NPCs in the list have the next day off
             foreach (NotificationDetails shop in toNotify) {
+                // Only notify if status is set to closing and tomorrow off
                 if (shop.tomorrowOff && shop.status == Status.Closing) {
                     countOffTomorrow += 1;
+                    // I am removing one from countClosing to correctly adjust the grammar
                     countClosing -= 1;
                 }
             }
             
+            // Prepare the string for the notification messages
             if (toNotify.Count > 0) {
                 for (int i = 0; i < toNotify.Count; i++) {
                     switch (toNotify[i].status) {
@@ -222,16 +228,6 @@ namespace TinyResort {
             checkIfStoreOpenRunning = false;
         }
 
-        public static string commaOrAnd(int count) {
-            switch (count) {
-                case 0:
-                    return "";
-                case 1: return "";
-                case 2: return " and ";
-            }
-            return ", ";
-        }
-        
         #region Refresh Variables
 
         // Updates the variables on Start of RealWorldTimeLight
