@@ -91,20 +91,17 @@ namespace TinyResort {
         
         public static string getShopName(string owner) {
             switch (owner.ToLower()) {
-                case "john":
-                    return "John's Goods";
-                case "franklyn":
-                    return "Franklyn's Lab";
-                case "rayne":
-                    return "Rayne's Greenhouse";
-                case "clover":
-                    return "Threadspace";
-                case "melvin":
-                    return "Melvin Furniture";
-                case "irwin":
-                    return "Irwin's Barn";
+                case "john": return "John's Goods";
+                case "franklyn": return "Franklyn's Lab";
+                case "rayne": return "Rayne's Greenhouse";
+                case "clover": return "Threadspace";
+                case "melvin": return "Melvin Furniture";
+                case "irwin": return "Irwin's Barn";
+                case "theodore": return "The Museum";
+                case "fletch": return "The Town Hall";
+                case "milburn": return "The Bank";
             }
-            return "Default";
+            return "default";
         }
 
         public static void checkStoreStatus(RealWorldTimeLight time, List<NotificationDetails> NPC) {
@@ -120,9 +117,10 @@ namespace TinyResort {
             for (int i = 0; i < NPC.Count; i++) {
 
                 // Check if on ignore list and villager
-                if (!JournalPause.ignoreFullList.Contains(NPC[i].details.NPCName.ToLower()) && NPC[i].isVillager && NPC[i].ShopName != "Default") {
+                if (!JournalPause.ignoreFullList.Contains(NPC[i].details.NPCName.ToLower()) && NPC[i].isVillager && NPC[i].ShopName != "default") {
                     // check if day off
-                    if (!NPC[i].sentDayOff && NPC[i].details.mySchedual.dayOff[tmpCurrentDay - 1]) {
+                    var isDayOff = NPC[i].details.mySchedual.dayOff[tmpCurrentDay - 1];
+                    if (!NPC[i].sentDayOff && isDayOff) {
                         JournalPause.Plugin.LogToConsole($"Day Off: {NPC[i].NPCName}");
                         NPC[i].sentDayOff = true;
                         NPC[i].status = Status.DayOff;
@@ -130,7 +128,7 @@ namespace TinyResort {
                         toNotify.Add(NPC[i]);
                     }
                     // Check opening hours
-                    if (!NPC[i].sentOpening && NPC[i].morningHours >= 8 && NPC[i].morningHours == time.currentHour) {
+                    if (!NPC[i].sentOpening && NPC[i].morningHours >= 8 && NPC[i].morningHours == time.currentHour && !isDayOff) {
                         JournalPause.Plugin.LogToConsole($"Opening: {NPC[i].NPCName}");
                         NPC[i].sentOpening = true;
                         NPC[i].status = Status.Opening;
@@ -138,7 +136,7 @@ namespace TinyResort {
                         toNotify.Add(NPC[i]);
                     }
                     // check closing hours
-                    if (!NPC[i].sentClosing && NPC[i].closingHours == time.currentHour + JournalPause.checkHoursBefore.Value) {
+                    if (!NPC[i].sentClosing && NPC[i].closingHours == time.currentHour + JournalPause.checkHoursBefore.Value && !isDayOff) {
                         JournalPause.Plugin.LogToConsole($"Closing: {NPC[i].NPCName}");
                         NPC[i].sentClosing = true;
                         NPC[i].status = Status.Closing;
@@ -181,8 +179,8 @@ namespace TinyResort {
                             if (countOpening == 1) opening = $"{toNotify[i].ShopName}";
                             if (countOpening == 2 && tmpOpening == 1) opening = $"{toNotify[i].ShopName} and ";
                             if (countOpening == 2 && tmpOpening == 2) opening += $"{toNotify[i].ShopName}";
-                            if (countOpening > 3 && countOpening != tmpOpening) opening += $"{toNotify[i].ShopName}, ";
-                            if (countOpening > 3 && countOpening == tmpOpening) opening += $" and {toNotify[i].ShopName}";
+                            if (countOpening >= 3 && countOpening != tmpOpening) opening += $"{toNotify[i].ShopName}, ";
+                            if (countOpening >= 3 && countOpening == tmpOpening) opening += $" and {toNotify[i].ShopName}";
                             break;
                         case Status.Closing:
                             if (toNotify[i].tomorrowOff) {
@@ -190,16 +188,17 @@ namespace TinyResort {
                                 if (countOffTomorrow == 1) offTomorrow = $"{toNotify[i].NPCName}";
                                 if (countOffTomorrow == 2 && tmpOffTomorrow == 1) offTomorrow = $"{toNotify[i].NPCName} and ";
                                 if (countOffTomorrow == 2 && tmpOffTomorrow == 2) offTomorrow += $"{toNotify[i].NPCName}";
-                                if (countOffTomorrow > 3 && countOffTomorrow != tmpOffTomorrow) offTomorrow += $"{toNotify[i].NPCName}, ";
-                                if (countOffTomorrow > 3 && countOffTomorrow == tmpOffTomorrow) offTomorrow += $" and {toNotify[i].NPCName}";
+                                if (countOffTomorrow >= 3 && countOffTomorrow != tmpOffTomorrow) offTomorrow += $"{toNotify[i].NPCName}, ";
+                                if (countOffTomorrow >= 3 && countOffTomorrow == tmpOffTomorrow) offTomorrow += $" and {toNotify[i].NPCName}";
                             }
                             else {
                                 tmpClosing += 1;
                                 if (countClosing == 1) closing = $"{toNotify[i].ShopName}";
                                 if (countClosing == 2 && tmpClosing == 1) closing = $"{toNotify[i].ShopName} and ";
                                 if (countClosing == 2 && tmpClosing == 2) closing += $"{toNotify[i].ShopName}";
-                                if (countClosing > 3 && countClosing != tmpClosing) closing += $"{toNotify[i].ShopName}, ";
-                                if (countClosing > 3 && countClosing == tmpClosing) closing += $" and {toNotify[i].ShopName}";
+                                if (countClosing >= 3 && tmpClosing == 1) closing = $"{toNotify[i].ShopName}, ";
+                                if (countClosing >= 3 && tmpClosing != 1 && countClosing != tmpClosing) closing += $"{toNotify[i].ShopName}, ";
+                                if (countClosing >= 3 && countClosing == tmpClosing) closing += $"and {toNotify[i].ShopName}";
                             }
                             break;
                         case Status.DayOff:
@@ -207,8 +206,8 @@ namespace TinyResort {
                             if (countDaysOff == 1) dayOff = $"{toNotify[i].NPCName}";
                             if (countDaysOff == 2 && tmpDayOff == 1) dayOff = $"{toNotify[i].NPCName} and ";
                             if (countDaysOff == 2 && tmpDayOff == 2) dayOff += $"{toNotify[i].NPCName}";
-                            if (countDaysOff > 3 && countDaysOff != tmpDayOff) dayOff += $"{toNotify[i].NPCName}, ";
-                            if (countDaysOff > 3 && countDaysOff == tmpDayOff) dayOff += $" and {toNotify[i].NPCName}";
+                            if (countDaysOff >= 3 && countDaysOff != tmpDayOff) dayOff += $"{toNotify[i].NPCName}, ";
+                            if (countDaysOff >= 3 && countDaysOff == tmpDayOff) dayOff += $" and {toNotify[i].NPCName}";
                             break;
                     }
                     
