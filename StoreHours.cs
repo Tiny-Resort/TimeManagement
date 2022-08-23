@@ -171,16 +171,18 @@ namespace TinyResort {
             }
             
             // Prepare the string for the notification messages
+            var useShopNames = JournalPause.useShopNames.Value;
+
             if (toNotify.Count > 0) {
                 for (int i = 0; i < toNotify.Count; i++) {
                     switch (toNotify[i].status) {
                         case Status.Opening:
                             tmpOpening += 1;
-                            if (countOpening == 1) opening = $"{toNotify[i].ShopName}";
-                            if (countOpening == 2 && tmpOpening == 1) opening = $"{toNotify[i].ShopName} and ";
-                            if (countOpening == 2 && tmpOpening == 2) opening += $"{toNotify[i].ShopName}";
-                            if (countOpening >= 3 && countOpening != tmpOpening) opening += $"{toNotify[i].ShopName}, ";
-                            if (countOpening >= 3 && countOpening == tmpOpening) opening += $" and {toNotify[i].ShopName}";
+                            if (countOpening == 1) opening = useShopNames ? $"{toNotify[i].ShopName}" : $"{toNotify[i].NPCName}'s";
+                            if (countOpening == 2 && tmpOpening == 1) opening = useShopNames ? $"{toNotify[i].ShopName} and " : $"{toNotify[i].NPCName}'s and ";
+                            if (countOpening == 2 && tmpOpening == 2) opening += useShopNames ? $"{toNotify[i].ShopName}, " : $"{toNotify[i].NPCName}'s, ";
+                            if (countOpening >= 3 && countOpening != tmpOpening) opening += useShopNames ? $"{toNotify[i].ShopName}, " : $"{toNotify[i].NPCName}'s, ";
+                            if (countOpening >= 3 && countOpening == tmpOpening) opening += useShopNames ? $"and {toNotify[i].ShopName}" : $"and {toNotify[i].NPCName}'s";
                             break;
                         case Status.Closing:
                             if (toNotify[i].tomorrowOff) {
@@ -193,12 +195,12 @@ namespace TinyResort {
                             }
                             else {
                                 tmpClosing += 1;
-                                if (countClosing == 1) closing = $"{toNotify[i].ShopName}";
-                                if (countClosing == 2 && tmpClosing == 1) closing = $"{toNotify[i].ShopName} and ";
-                                if (countClosing == 2 && tmpClosing == 2) closing += $"{toNotify[i].ShopName}";
-                                if (countClosing >= 3 && tmpClosing == 1) closing = $"{toNotify[i].ShopName}, ";
-                                if (countClosing >= 3 && tmpClosing != 1 && countClosing != tmpClosing) closing += $"{toNotify[i].ShopName}, ";
-                                if (countClosing >= 3 && countClosing == tmpClosing) closing += $"and {toNotify[i].ShopName}";
+                                if (countClosing == 1) closing = useShopNames ? $"{toNotify[i].ShopName}" : $"{toNotify[i].NPCName}'s";
+                                if (countClosing == 2 && tmpClosing == 1) closing = useShopNames ? $"{toNotify[i].ShopName} and " : $"{toNotify[i].NPCName}'s and ";
+                                if (countClosing == 2 && tmpClosing == 2) closing += useShopNames ? $"{toNotify[i].ShopName}" : $"{toNotify[i].NPCName}'s";
+                                if (countClosing >= 3 && tmpClosing == 1) closing = useShopNames ? $"{toNotify[i].ShopName}, " : $"{toNotify[i].NPCName}'s, ";
+                                if (countClosing >= 3 && tmpClosing != 1 && countClosing != tmpClosing) closing += useShopNames ? $"{toNotify[i].ShopName}, " : $"{toNotify[i].NPCName}'s, ";
+                                if (countClosing >= 3 && countClosing == tmpClosing) closing += useShopNames ? $"and {toNotify[i].ShopName}" : $"and {toNotify[i].NPCName}'s";
                             }
                             break;
                         case Status.DayOff:
@@ -210,11 +212,10 @@ namespace TinyResort {
                             if (countDaysOff >= 3 && countDaysOff == tmpDayOff) dayOff += $" and {toNotify[i].NPCName}";
                             break;
                     }
-                    
                 }
-                string openingNotification = countOpening > 1 ? $"{opening} are open now!" : $"{opening} is open now!";
-                string closingNotification = countClosing > 1 ? $"{closing} are closing {JournalPause.checkHoursBefore.Value} hours." : $"{closing} is closing in {JournalPause.checkHoursBefore.Value} hours.";
-                string offTomorrowNotification = countOffTomorrow > 1 ? $"{offTomorrow} are closing in {JournalPause.checkHoursBefore.Value} hours and will be closed tomorrow!" : $"{offTomorrow} is closing in {JournalPause.checkHoursBefore.Value} and will be closed tomorrow!";
+                string openingNotification = useShopNames ? ( countOpening > 1 ? $"{opening} are open now!" : $"{opening} is open now!") : (countOpening > 1 ? $"{opening} stores are open now!" : $"{opening} store is open now!");
+                string closingNotification = useShopNames ? (countOpening > 1 ? $"{closing} are closing {JournalPause.checkHoursBefore.Value} hours." : $"{closing} is closing in {JournalPause.checkHoursBefore.Value} hours.") : (countOpening > 1 ? $"{closing} stores are closing {JournalPause.checkHoursBefore.Value} hours." : $"{closing} store is closing in {JournalPause.checkHoursBefore.Value} hours.");
+                string offTomorrowNotification = countOffTomorrow > 1 ? $"{offTomorrow} are closing in {JournalPause.checkHoursBefore.Value} hours and will be closed tomorrow!" : $"{offTomorrow} is closing in {JournalPause.checkHoursBefore.Value} hours and will be closed tomorrow!";
                 string dayOffNotification = countDaysOff > 1 ? $"{dayOff} are having the day off!" : $"{dayOff} has the day off!";
 
                 if (countOpening > 0) NotificationManager.manage.createChatNotification(openingNotification);

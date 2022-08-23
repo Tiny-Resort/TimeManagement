@@ -39,6 +39,8 @@ namespace TinyResort {
         public static ConfigEntry<bool> disableKeybinds;
         public static ConfigEntry<string> ignoreList;
         public static ConfigEntry<int> checkHoursBefore;
+        public static ConfigEntry<bool> useShopNames;
+
         
         public static List<string> ignoreFullList;
         public static bool FullVersion = true;
@@ -58,6 +60,8 @@ namespace TinyResort {
             }
             ignoreList = Config.Bind<string>("Shop Control", "IgnoreNPCShopNotification", " ", $"Add NPC names that you would like to ignore and separate it by comma (no space).\nHere is a list: John, Clover, Rayne, Irwin, Theodore, Melvin, Franklyn, Fletch, Milburn");
             checkHoursBefore = Config.Bind<int>("Shop Control", "X-HoursBefore", 1, "Set a value of 1 or 2 for how many hours before closing you'd like to notified.");
+            useShopNames = Config.Bind<bool>("Shop Control", "UseShopNames", true, $"Set to true to use the shop's name and false to use the NPC name in the notification.");
+
             timeSpeedDefault = timeSpeed;
 
             if (checkHoursBefore.Value > 2) checkHoursBefore.Value = 2;
