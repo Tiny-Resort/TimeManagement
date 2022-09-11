@@ -47,7 +47,7 @@ namespace TinyResort {
 
         private void Awake() {
 
-            Plugin = TRTools.Initialize(this, Logger, 10, pluginGuid, pluginName, pluginVersion);
+            Plugin = TRTools.Initialize(this, 10);
 
             #region Configuration
 

@@ -15,11 +15,9 @@
     <PackageReference Include="UnityEngine.Modules" Version="2020.3.17" PrivateAssets="all" IncludeAssets="compile"/>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\TinyResortTools\Tiny Resort Tools\**">
-      <Link>Tiny Resort Tools\**</Link>
-    </Compile>
-  </ItemGroup>
-  <ItemGroup>
+    <Reference Include="dev.TinyResort.TRTools">
+      <HintPath>..\DinkumInstallFolder\BepInEx\plugins\dev.TinyResort.TRTools.dll</HintPath>
+    </Reference>
     <Reference Include="Assembly-CSharp_publicized">
       <HintPath>..\DinkumInstallFolder\Dinkum_Data\Managed\publicized_assemblies\Assembly-CSharp_publicized.dll</HintPath>
     </Reference>

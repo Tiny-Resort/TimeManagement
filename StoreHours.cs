@@ -121,7 +121,7 @@ namespace TinyResort {
                     // check if day off
                     var isDayOff = NPC[i].details.mySchedual.dayOff[tmpCurrentDay - 1];
                     if (!NPC[i].sentDayOff && isDayOff) {
-                        JournalPause.Plugin.LogToConsole($"Day Off: {NPC[i].NPCName}");
+                        JournalPause.Plugin.Log($"Day Off: {NPC[i].NPCName}");
                         NPC[i].sentDayOff = true;
                         NPC[i].status = Status.DayOff;
                         countDaysOff += 1;
@@ -129,7 +129,7 @@ namespace TinyResort {
                     }
                     // Check opening hours
                     if (!NPC[i].sentOpening && NPC[i].morningHours >= 8 && NPC[i].morningHours == time.currentHour && !isDayOff) {
-                        JournalPause.Plugin.LogToConsole($"Opening: {NPC[i].NPCName}");
+                        JournalPause.Plugin.Log($"Opening: {NPC[i].NPCName}");
                         NPC[i].sentOpening = true;
                         NPC[i].status = Status.Opening;
                         countOpening += 1;
@@ -137,7 +137,7 @@ namespace TinyResort {
                     }
                     // check closing hours
                     if (!NPC[i].sentClosing && NPC[i].closingHours == time.currentHour + JournalPause.checkHoursBefore.Value && !isDayOff) {
-                        JournalPause.Plugin.LogToConsole($"Closing: {NPC[i].NPCName}");
+                        JournalPause.Plugin.Log($"Closing: {NPC[i].NPCName}");
                         NPC[i].sentClosing = true;
                         NPC[i].status = Status.Closing;
                         countClosing += 1;
@@ -217,11 +217,12 @@ namespace TinyResort {
                 string closingNotification = useShopNames ? (countOpening > 1 ? $"{closing} are closing {JournalPause.checkHoursBefore.Value} hours." : $"{closing} is closing in {JournalPause.checkHoursBefore.Value} hours.") : (countOpening > 1 ? $"{closing} stores are closing {JournalPause.checkHoursBefore.Value} hours." : $"{closing} store is closing in {JournalPause.checkHoursBefore.Value} hours.");
                 string offTomorrowNotification = countOffTomorrow > 1 ? $"{offTomorrow} are closing in {JournalPause.checkHoursBefore.Value} hours and will be closed tomorrow!" : $"{offTomorrow} is closing in {JournalPause.checkHoursBefore.Value} hours and will be closed tomorrow!";
                 string dayOffNotification = countDaysOff > 1 ? $"{dayOff} are having the day off!" : $"{dayOff} has the day off!";
-
+                
                 if (countOpening > 0) NotificationManager.manage.createChatNotification(openingNotification);
                 if (countClosing > 0) NotificationManager.manage.createChatNotification(closingNotification);
                 if (countOffTomorrow > 0) NotificationManager.manage.createChatNotification(offTomorrowNotification);
                 if (countDaysOff > 0) NotificationManager.manage.createChatNotification(dayOffNotification);
+                
                 
                 toNotify.Clear();
             }
