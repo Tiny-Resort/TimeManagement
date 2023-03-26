@@ -16,7 +16,7 @@
   </ItemGroup>
   <ItemGroup>
     <Reference Include="dev.TinyResort.TRTools">
-      <HintPath>..\DinkumInstallFolder\BepInEx\plugins\dev.TinyResort.TRTools.dll</HintPath>
+      <HintPath>..\DinkumInstallFolder\BepInEx\plugins\TR Tools\dev.TinyResort.TRTools.dll</HintPath>
     </Reference>
     <Reference Include="Assembly-CSharp_publicized">
       <HintPath>..\DinkumInstallFolder\Dinkum_Data\Managed\publicized_assemblies\Assembly-CSharp_publicized.dll</HintPath>
@@ -344,6 +344,6 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all"/>
   </ItemGroup>
   <PropertyGroup>
-    <PostBuildEvent>call "$(SolutionDir)..\PostBuildBat.bat" "$(SolutionDir)bin\Debug\net472\$(AssemblyName).dll" "$(AssemblyName)"</PostBuildEvent>
+    <PostBuildEvent>call "$(SolutionDir)..\PostBuildBat.bat" "$(SolutionDir)bin\Debug\net472\$(AssemblyName).dll" "$(AssemblyName).dll"</PostBuildEvent>
   </PropertyGroup>
 </Project>

@@ -17,7 +17,7 @@ namespace TinyResort {
         public static TRPlugin Plugin;
         public const string pluginGuid = "tinyresort.dinkum.journalpause";
         public const string pluginName = "Time Management";
-        public const string pluginVersion = "1.3.0";
+        public const string pluginVersion = "1.3.1";
         
         public static RealWorldTimeLight realWorld;
         public static NPCManager manager;
@@ -174,7 +174,7 @@ namespace TinyResort {
             var decreaseSpeed = Input.GetKeyDown(decreaseTimeSpeedHotkey.Value);
 
             // Increasing the speed of time, keeping it below 20 minutes per second
-            if (increaseSpeed || decreaseSpeed) {
+            if (increaseSpeed || decreaseSpeed) { 
                 var text = "Time speed ";
 
                 // Decreasing Speed
@@ -183,7 +183,7 @@ namespace TinyResort {
                     if (timeSpeed >= 60f) {
                         timeSpeed = 60f;
                         text += "at maximum!";
-                    }
+                    } 
 
                     else {
 
