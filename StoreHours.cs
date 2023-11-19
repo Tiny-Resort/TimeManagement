@@ -56,7 +56,7 @@ namespace TinyResort {
         }
 
         public static bool checkIfOffTomorrow(NPCDetails details) {
-            int currentDay =  WorldManager.manageWorld.day;
+            int currentDay =  WorldManager.Instance.day;
             int nextDay = currentDay >= 7 ? 0 : currentDay;
             if (details.mySchedual.dayOff[nextDay]) { return true; }
             return false;
@@ -112,7 +112,7 @@ namespace TinyResort {
             // Don't let it start a new one until the current notifications are posted (this could be an issue if time was going too fast, but won't account for that)
             checkIfStoreOpenRunning = true;
             toNotify.Clear();
-            var tmpCurrentDay = WorldManager.manageWorld.day;
+            var tmpCurrentDay = WorldManager.Instance.day;
             
             for (int i = 0; i < NPC.Count; i++) {
 

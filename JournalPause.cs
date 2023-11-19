@@ -17,7 +17,7 @@ namespace TinyResort {
         public static TRPlugin Plugin;
         public const string pluginGuid = "tinyresort.dinkum.journalpause";
         public const string pluginName = "Time Management";
-        public const string pluginVersion = "1.3.1";
+        public const string pluginVersion = "1.3.2";
         
         public static RealWorldTimeLight realWorld;
         public static NPCManager manager;
@@ -43,7 +43,7 @@ namespace TinyResort {
 
         
         public static List<string> ignoreFullList;
-        public static bool FullVersion = true;
+        public static bool FullVersion = true; 
 
         private void Awake() {
 
@@ -163,7 +163,7 @@ namespace TinyResort {
                 // Run any necessary tasks
                 if (__instance.currentMinute == 0 || __instance.currentMinute == 15 || __instance.currentMinute == 30 || __instance.currentMinute == 45) { __instance.taskChecker.Invoke(); }
             }
-        }
+        } 
 
         // Increasing or decreasing the speed of time with hotkeys
         public static void timeSpeedInputs() {
@@ -290,7 +290,7 @@ namespace TinyResort {
             if (!realWorld.isServer) return true;
 
             // Fixes issue with opening menu quickly after reviving from death
-            if (!NetworkMapSharer.share.nextDayIsReady) return true;
+            if (!NetworkMapSharer.Instance.nextDayIsReady) return true;
 
             // Makes sure the entire journal is being closed, not just a sub-submenu
             if (MilestoneManager.manage.milestoneClaimWindowOpen ||
